@@ -369,9 +369,9 @@ def write_inp(o, nodes, els, sets, rps, law, geo):
     w('*Output, history, frequency=1')
     w('*Node Output, nset=RP1\nU1, U2, UR3, RF1, RF2, RM3')
     w('*Node Output, nset=RP2\nU1, U2, UR3, RF1, RF2, RM3')
-    w('*Energy Output\nALLSE, ALLPD, ALLDMD, ALLVD, ALLWK, ALLIE, ALLKE, ALLSD, ETOTAL')
+    w('*Energy Output\nALLSE, ALLPD, ALLDMD, ALLVD, ALLCD, ALLWK, ALLIE, ALLKE, ALLSD, ETOTAL')
     for c in coh:
-        w('*Energy Output, elset=%s\nALLSE, ALLDMD, ALLVD' % c)
+        w('*Energy Output, elset=%s\nALLSE, ALLDMD, ALLVD, ALLCD' % c)
     w('*Node Print, nset=RP1, frequency=1\nU2, RF2')
     w('*Node Print, nset=MOUTH_U, frequency=1\nU2')
     w('*Node Print, nset=MOUTH_L, frequency=1\nU2')

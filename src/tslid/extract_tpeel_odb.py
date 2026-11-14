@@ -168,6 +168,7 @@ def main():
         r['W_ext'] = w
     for var, part, col in (('ALLSE', 'Assembly', 'ALLSE'), ('ALLPD', 'Assembly', 'ALLPD'),
                            ('ALLDMD', 'Assembly', 'ALLDMD'), ('ALLVD', 'Assembly', 'ALLVD'),
+                           ('ALLCD', 'Assembly', 'ALLCD'), ('ALLWK', 'Assembly', 'ALLWK'),
                            ('ALLDMD', 'COH_TIP', 'ALLDMD_TIP'), ('ALLDMD', 'COH_BR', 'ALLDMD_BR'),
                            ('ALLDMD', 'COH_HUMP', 'ALLDMD_HUMP')):
         ht, hv = history(step, part, var)

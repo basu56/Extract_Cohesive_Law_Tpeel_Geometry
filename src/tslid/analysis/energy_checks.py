@@ -6,9 +6,11 @@ and process-zone length for T-peel runs of build_tpeel_inp.py + extract_tpeel_od
     python3 energy_checks.py <rundir> [--pattern 'pz_*'] [--out summary.csv]
 
 Per run (<job>.json + <job>_response.csv):
-    E4  E_bal   = max over frames (W_ext > 5 % of final) of
-                  |W_ext - ALLSE - ALLPD - ALLDMD - ALLVD| / W_ext            tol 1 %
-    E5  vd_rel  = ALLVD / ALLDMD at the last frame                            tol 1 %
+    E4  E_bal   = max over the analysis window (W_ext > 5 % of final, crack tip <= L - 15 mm) of
+                  |W_ext - ALLSE - ALLPD - ALLDMD - ALLVD - ALLCD| / W_ext    tol 1 %
+                  (E_bal_full: same over the whole record, incl. the unstable end-of-ligament failure)
+    E5  vd_rel  = (ALLVD + ALLCD) / ALLDMD at the end of the window           tol 1 %
+                  Runs without ALLCD output (pilot, before 2026-11-14 pm): E5 is bounded by E_bal.
     E6  diss_rel = slope of (ALLDMD + ALLVD) vs crack length over steady propagation,
                   / (Gc W) - 1                                                tol 2 %
     l_pz        = mean (ell_sdeg0 - ell_sdeg1) over steady propagation (mm), l_pz/H,
@@ -52,11 +54,18 @@ def check(rundir, job):
         return out
     r = read_csv(path)
     W, lam = p['W'], np.zeros_like(r['W_ext'])
-    stored = r['ALLSE'] + r.get('ALLPD', lam) + r['ALLDMD'] + r['ALLVD']
+    visc = r['ALLVD'] + r.get('ALLCD', lam)        # ALLCD: cohesive viscous regularization (newer runs)
+    stored = r['ALLSE'] + r.get('ALLPD', lam) + r['ALLDMD'] + visc
     Wx = r['W_ext']
+    res = np.abs(Wx - stored) / np.where(Wx > 0, Wx, np.nan)
     m = Wx > 0.05 * Wx[-1]
-    out['E_bal'] = float(np.nanmax(np.abs(Wx[m] - stored[m]) / Wx[m])) if m.any() else np.nan
-    out['vd_rel'] = float(r['ALLVD'][-1] / r['ALLDMD'][-1]) if r['ALLDMD'][-1] > 0 else np.nan
+    # E4 is evaluated over the analysis window: up to the crack tip reaching L - 15 mm.
+    # The last ~2H of ligament fails unstably (end effect); its residual is reported separately.
+    win = m & (r['ell_sdeg1'] <= p['L'] - 15.0)
+    out['E_bal'] = float(np.nanmax(res[win])) if win.any() else np.nan
+    out['E_bal_full'] = float(np.nanmax(res[m])) if m.any() else np.nan
+    out['has_ALLCD'] = 'ALLCD' in r
+    out['vd_rel'] = float(visc[win][-1] / r['ALLDMD'][win][-1]) if win.any() and r['ALLDMD'][win][-1] > 0 else np.nan
     i = int(np.nanargmax(r['P']))
     out.update(P_peak=float(r['P'][i]), delta_peak=float(r['delta'][i]), delta_end=float(r['delta'][-1]))
     ell1, ell0 = r['ell_sdeg1'], r['ell_sdeg0']
@@ -86,7 +95,7 @@ def main():
     jobs = sorted(os.path.basename(j)[:-5] for j in glob.glob(os.path.join(o.rundir, o.pattern + '.json')))
     res = [check(o.rundir, j) for j in jobs]
     keys = ['job', 'Gc', 'sigc', 'alpha', 'phi_e', 'h_coh', 'completed', 'status', 'P_peak', 'delta_peak',
-            'delta_end', 'ell_end', 'n_steady', 'l_pz', 'l_pz_std', 'l_pz_H', 'n_el_pz', 'E_bal', 'vd_rel',
+            'delta_end', 'ell_end', 'n_steady', 'l_pz', 'l_pz_std', 'l_pz_H', 'n_el_pz', 'E_bal', 'E_bal_full', 'has_ALLCD', 'vd_rel',
             'diss_rel', 'pass_E4', 'pass_E5', 'pass_E6']
     with open(os.path.join(o.rundir, o.out), 'w') as f:
         w = csv.DictWriter(f, keys, extrasaction='ignore')
