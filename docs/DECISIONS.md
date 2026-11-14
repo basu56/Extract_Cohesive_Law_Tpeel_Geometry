@@ -66,3 +66,51 @@ Rationale: satisfies the inverse-crime rule (CLAUDE.md rule 4) without extra cod
 the truth law. If ABAQUS rejects α < 0, truth for concave shapes uses TABULAR on the
 fine mesh.
 Status: proposed (Claude Code) — depends on the Phase 0 single-element test.
+
+## 2026-11-14 — D3 update: α shape family confirmed
+User agreed: start with the one-parameter family s(x; α); add complexity (multi-stage,
+bridging) later. D3 status → **agreed**.
+
+## 2026-11-14 — D4/D6 update: context workflow confirmed
+User agreed. Claude Code maintains notes, decisions and progress in this repo;
+the user has Claude Web review the repository periodically. D4 and D6 status → **agreed**.
+
+## 2026-11-14 — D7 update: generator reused, calibration not reproduced
+User agreed to build on the campaign03 generator, with a change: synthetic studies do
+**not** need to reproduce the SG24 calibration or match experiments. The generator is a
+starting point and may be simplified or changed. Experimental evidence is used only to
+**bound the input parameters** (D9). D7 status → **agreed (modified)**.
+
+## 2026-11-14 — D9: Parameter space bounded by experimental evidence
+Decision: synthetic laws are sampled from physically grounded bounds, not chosen
+arbitrarily.
+- G_c ∈ [0.1, 0.4] N/mm (= kJ/m²), user-specified from existing experimental
+  evidence; reference value G_c = 0.40 N/mm (approximate, not to be matched exactly).
+- K = 8500 MPa/mm (E_a/t with t = 0.4 mm; E_a = 3400 MPa is an **assumed** value
+  inherited from campaign03 and still needs a source).
+- σ_c: bounded above by energy admissibility, σ_c < √(2 G_c K) (41–82 MPa over the
+  G_c range), and further by the elastic-energy fraction limit in D10. Lower and upper
+  physical bounds from adhesive strength data: **TBD — user to supply** (campaign03
+  calibrated tip strengths were 15–20 MPa).
+- α: range TBD after the single-element test (whether α < 0 is supported).
+Implied ℓ_ch/H = E′G_c/(σ_c² H) ranges from ≈ 0.35 to ≈ 50 (E′ = 78.6 GPa, H = 6.324),
+which spans the small- to large-scale process-zone regimes needed for H2.
+Status: G_c range **agreed**; σ_c bounds proposed/TBD.
+
+## 2026-11-14 — D10: Energy constraints are a guiding principle of the project
+Decision (user's emphasis): every generated law, every simulation and every inferred
+law must satisfy explicit, checkable energy constraints. Fracture energy is constrained
+by evidence, and the energy budget is reported throughout. Concrete constraints are
+listed in RESEARCH_PLAN.md §4b (law level, simulation level, inference level).
+Rationale: keeps the inverse problem physically grounded, not purely mathematical;
+continues the user's prior work on fracture energy budgets in adhesives.
+Status: principle **agreed**; the specific checks and tolerances are proposed.
+
+## 2026-11-14 — D11: Elastic adherends for Phase 1 (proposed)
+Decision: Phase 1 uses linear-elastic adherends (`--no-plastic`).
+Rationale: then the only dissipation is cohesive (ALLPD = 0), so the energy balance
+closes cleanly and the dissipated energy can be checked directly against G_c × area
+(D10). Campaign01 found adherend plasticity irrelevant for this specimen. Geometry
+default: H = 6.324, t = 0.4, W = 15, clamp/load, a0 = 18 mm (the user's preferred
+1 mm precrack).
+Status: proposed — awaiting user confirmation.

@@ -35,3 +35,30 @@ review the existing T-peel ABAQUS model, and define how Code and Web stay in syn
 
 ## Next steps
 See `docs/STATUS.md`.
+
+---
+
+## Continuation — user decisions and energy constraints
+
+**User decisions:** D3 (α-family) agreed. D4/D6 agreed: Claude Code keeps notes in the repo
+and Claude Web reviews it periodically. D7 agreed with a change: reuse the generator but do
+not reproduce the experimental calibration; use experimental evidence only to bound
+parameters. G_c ∈ 0.1–0.4 kJ/m², reference ≈ 0.40 N/mm, not exact.
+The user stressed that **energy constraints must guide the whole project**: fracture energy
+is constrained by evidence, and generated and inferred laws must stay physically reasonable.
+
+**Done:**
+- DECISIONS: D3/D4/D6/D7 updated; new D9 (parameter bounds), D10 (energy principle),
+  D11 (elastic adherends, a0 = 18; proposed).
+- RESEARCH_PLAN §4a parameter-bounds table with admissibility arithmetic; §4b energy
+  constraints E1–E10 at law, simulation and inference level. CLAUDE.md rule 8.
+
+**Results [D, arithmetic]:** with K = 8500, σ_c < √(2G_cK) = 41–82 MPa over the G_c range.
+ℓ_ch/H spans ≈ 0.35–50. Energy partition φ_e = σ_c²/(2KG_c) reaches 0.94 at
+G_c = 0.1, σ_c = 40, i.e. almost elastic-brittle, which motivates the E2 limit.
+
+**Interpretation [I]:** E6 (dALLDMD/da = G_c W) and E8 (G_c × unit-area shape) make energy
+both a dataset quality check and a structural prior for the inversion. E9 frames
+identifiability as energy vs energy partition vs shape at fixed energy.
+
+**Open:** σ_c bounds, source of E_a, D11, tolerances (see STATUS.md).

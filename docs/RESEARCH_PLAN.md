@@ -102,6 +102,58 @@ G_c > σ_c δ_0 / 2.
 This family lets us vary **shape at fixed G_c and σ_c**, which isolates the shape
 question. Parameters to identify in Phase 1B: θ = (σ_c, G_c, α), K fixed.
 
+### 4a. Parameter bounds (DECISIONS.md D9)
+
+Bounds come from existing experimental evidence, so the synthetic problem stays
+physically grounded:
+
+| quantity | range | source / status |
+|---|---|---|
+| G_c | 0.1 – 0.4 N/mm (reference 0.40) | experimental evidence, user [agreed] |
+| K | 8500 MPa/mm | E_a/t, E_a = 3400 MPa assumed [needs source] |
+| σ_c | lower/upper TBD; hard cap √(2 G_c K) = 41–82 MPa | adhesive strength data TBD |
+| α | TBD (≥ 0 at least) | single-element test |
+
+Admissibility worked example (K = 8500, E′ = 78.6 GPa, H = 6.324 mm) [D, arithmetic]:
+
+| G_c (N/mm) | σ_c (MPa) | ℓ_ch/H | δ_f (linear) mm | φ_e = σ_c²/(2KG_c) |
+|---|---|---|---|---|
+| 0.1 | 10 | 12.4 | 0.020 | 0.06 |
+| 0.1 | 40 | 0.78 | 0.005 | 0.94 |
+| 0.4 | 20 | 12.4 | 0.040 | 0.06 |
+| 0.4 | 60 | 1.38 | 0.013 | 0.53 |
+
+### 4b. Energy constraints (DECISIONS.md D10 — guiding principle)
+
+**Law level** (every generated or inferred law):
+- E1. Exact energy: ∫₀^δ_f σ dδ = G_c, checked by closed form and by quadrature of the
+  tabulated/ABAQUS law (relative tolerance 1e-4) [proposed tolerance].
+- E2. Energy partition: φ_e = σ_c δ_0/(2G_c) = σ_c²/(2 K G_c) is the fraction of G_c
+  stored elastically before damage onset. Require φ_e ≤ φ_max (proposed 0.5) so that the
+  law has a real softening branch rather than being elastic-brittle. Report
+  φ_e for every case.
+- E3. Admissibility: σ ≥ 0, finite δ_f, monotone damage, secant unloading (set A).
+
+**Simulation level** (every ABAQUS run; histories already extracted by
+`extract_tpeel_odb.py`):
+- E4. Global balance: W_ext = ∫P dΔ = ALLSE + ALLDMD + ALLVD (+ ALLPD = 0 for elastic
+  adherends), residual < 1 % of W_ext [proposed].
+- E5. Regularization: ALLVD / ALLDMD < 1 % [proposed]; otherwise the run is not part of
+  the dataset, and it is reported as failed (rule 3).
+- E6. Dissipation vs fracture energy: during steady propagation,
+  dALLDMD/d(a) = G_c W (W = 15 mm); deviation < 2 % [proposed]. This links the law to
+  the structural response directly and checks the crack-length measure.
+- E7. Kinetic energy ≈ 0 (quasi-static), and no snap-back or abort; record the
+  stability status for every run.
+
+**Inference level** (Phase 1B onward):
+- E8. Parameterize laws as G_c × (normalized shape of unit area), so that E1 holds by
+  construction; infer G_c and shape separately.
+- E9. Report identifiability separately for (i) G_c, (ii) the energy partition
+  φ_e / σ_c, and (iii) the shape at fixed energy. Hypothesis [H]: P–Δ constrains (i)
+  tightly and (iii) weakly (H1, H3).
+- E10. Inferred laws that violate E1–E3 are rejected, never projected silently.
+
 **Dimensional analysis [I, to be confirmed]:**
 
     P̂ = f(Δ̂; ℓ_ch/H, K H/E′, α, ℓ0/H, L/H, ν)

@@ -47,6 +47,10 @@ bridging or multi-stage laws yet; Phase 1 uses the one-parameter shape family in
    floor (mesh + increment + viscous regularization) established in Phase 0.
 6. Challenge the user's assumptions when evidence warrants; do not just agree.
 7. Explain the reasoning behind a new method before implementing it.
+8. **Energy first.** Every law, simulation and inferred law must satisfy the energy
+   constraints in `docs/RESEARCH_PLAN.md` §4b (exact G_c, energy partition, global energy
+   balance, dissipation = G_c × area, small viscous dissipation). Parameter ranges come
+   from experimental evidence (§4a), not from convenience.
 
 ## Cluster rules (Purdue HPC, SLURM)
 
