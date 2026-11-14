@@ -44,7 +44,8 @@ away from the peak. σ_c information is confined to δ ≲ 0.4 mm.
 
 ## Running
 
-Nothing.
+- **α sweep** (D17): G_c 0.4, σ_c 40 and 21, α −3 … 7 (14 runs), `scripts/phase1/run_alpha_sweep.sh`,
+  rundir `/scratch/negishi/basu56/tslid_runs/phase1b_alpha_sweep/` (SLURM id in the session log).
 
 ## Runtime note
 A base run takes ~20–25 min on 1 CPU. The cost is 26k CPE4I elements (adherend columns follow
@@ -55,8 +56,9 @@ strip with coarser tied arms (needs a convergence check).
 
 ## Next actions
 
-0. User is checking that Claude Web can read the repo before the next step.
-1. α at fixed (G_c 0.4, σ_c 40): needs the user's α range (proposal −3 … 7).
+0. Repo is public; Claude Web can read it.
+1. Analyse the α sweep (D17): ΔP_peak and post-peak vs α at both σ_c, against the floor; flag ℓ_cz > H.
+1b. Cheap (Web suggestion): R-curve G(ℓ) from existing σ_c-sweep runs; plateau should return 0.40, transient ∝ ℓ_cz.
 2. Possibly repeat the σ_c sweep at G_c 0.1 and 0.25 (same design) to show the result holds across G_c.
 3. Speed up the model (output thinning, then mesh grading + check) before generating data sets.
 4. User: ℓ_pz definition.

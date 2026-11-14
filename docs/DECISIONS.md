@@ -195,3 +195,16 @@ h_coh 0.1 mm (≥ 11 elements per ℓ_cz at σ_c = 58), viscosity 1e-4 s, n_inc 
 Evidence: `results/phase0/convergence/`. Mesh/increment error on P ≤ 0.04 % of P_peak;
 viscosity 1e-3 biases P by ≈ 0.1 % after the peak; 1e-4 vs 1e-5 differ by < 0.01 %.
 Status: **adopted by Claude Code** (numerical; within the agreed tolerances D10).
+
+## 2026-11-14 — D17: Shape (α) sweep at fixed G_c and σ_c
+Decision (user, on Claude Web's recommendation): vary α only, at G_c = 0.40 N/mm, with
+α ∈ {−3, −1.5, 0, 1.5, 3, 5, 7} at two fixed σ_c: 40 MPa (ℓ_cz/H ≈ 0.42 at α = 0) and
+21 MPa (ℓ_cz/H ≈ 1.0 at α = 0). Production settings D16; reference α = 0 for each σ_c.
+Tests H3 (shape is the least identifiable parameter) and H2 (identifiability grows with ℓ_cz/H).
+All laws are admissible (φ_e = 0.235 / 0.065, independent of α). δ_f − δ0 grows with α
+(σ_c 40: 0.0106 / 0.0153 / 0.0539 mm at α −3 / 0 / 7).
+**Caveat:** the c = 1 bound (D12) was set at α = 0, so the σ_c = 21 MPa runs with α > 0 will
+likely give ℓ_cz > H. They are run anyway, ℓ_cz is measured, and the out-of-bound runs are flagged.
+How ℓ_cz (to the traction-free point) should treat the long low-traction tail of high-α laws
+is an open point.
+Status: **agreed** (sweep design); runner `scripts/phase1/run_alpha_sweep.sh`.

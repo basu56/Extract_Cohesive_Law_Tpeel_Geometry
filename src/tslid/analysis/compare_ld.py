@@ -90,16 +90,17 @@ def main():
     import matplotlib.pyplot as plt
     from matplotlib import cm
     W = ref['p']['W']
+    LEG = {'sigc': r'$\sigma_c = %g$ MPa', 'alpha': r'$\alpha = %g$', 'Gc': r'$G_c = %g$ N/mm'}
     fig, ax = plt.subplots(1, 2, figsize=(29 / 2.54, 11.8 / 2.54))
     vals = [R[j]['p'][o.label] for j in jobs]
-    cmap = cm.get_cmap('Blues')
+    cmap = matplotlib.colormaps['Blues'] if hasattr(matplotlib, 'colormaps') else cm.get_cmap('Blues')
     col = {j: cmap(0.35 + 0.6 * (v - min(vals)) / (max(vals) - min(vals) or 1)) for j, v in zip(jobs, vals)}
     for j in ctx:
         ax[0].plot(R[j]['d'], R[j]['P'] / W, color='0.7', lw=0.8, ls='--')
     for j in jobs:
         x = R[j]
         lw = 2.4 if j == o.ref else 1.4
-        ax[0].plot(x['d'], x['P'] / W, color=col[j], lw=lw, label=r'$\sigma_c = %g$ MPa' % x['p'][o.label])
+        ax[0].plot(x['d'], x['P'] / W, color=col[j], lw=lw, label=LEG.get(o.label, o.label + ' = %g') % x['p'][o.label])
         Pg = np.interp(grid, x['d'], x['P'])
         ax[1].plot(grid, 100 * (Pg - Pref) / Ppk_ref, color=col[j], lw=lw)
     ax[0].axvline(d_hi, color='0.55', lw=0.8)
