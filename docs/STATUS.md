@@ -16,10 +16,9 @@ Done:
 - **Single-element verification passed (14/14)** — `results/phase0/single_element/`.
   ABAQUS EXPONENTIAL == s(x; α), α < 0 accepted, TABULAR within 1.6e-5 σ_c, dissipation = G_c.
 
-Running:
-- **Pilot process-zone map**, Negishi SLURM 45821190, `/scratch/negishi/basu56/tslid_runs/phase0_pz_map/`:
-  α = 0, G_c ∈ {0.1, 0.25, 0.4}, σ_c ∈ {5…57} up to the E2 cap (21 runs). Output:
-  ℓ_pz/H(G_c, σ_c) → σ_c,min (D12); E4–E6 energy checks per run; elements per ℓ_pz.
+Done (pilot): **ℓ_cz map, α = 0, 21/21 runs** — `results/phase0/pz_map/`. ℓ_cz/H is a
+single function of ℓ_ch/H; ℓ_cz ≈ 0.02–0.14 ℓ_ch. c = 1 → σ_c,min 10.5 / 16.6 / 21.0 MPa
+at G_c 0.1 / 0.25 / 0.4. Energy checks pass, except E4 at σ_c = 5 (ℓ_cz > 2.7H, out of bounds).
 
 ## Warning — zone lengths
 
@@ -32,14 +31,15 @@ Pilot preview [D, α = 0, 17 runs]: ℓ_cz/H collapses onto one curve in ℓ_ch/
 
 ## Next actions
 
-1. Analyse the pilot: ℓ_pz/H map, σ_c,min(G_c) for c = 1, energy checks, mesh resolution.
-2. Repeat for α ≠ 0 at a few points (ℓ_pz depends on shape at fixed G_c, σ_c).
+1. User: choose c (ℓ_cz ≤ c·H) and the α range; define ℓ_pz (evening).
+2. ℓ_cz map for α ≠ 0 at a few ℓ_ch/H values (shape shifts the curve).
+2b. Shorten the prescribed Δ (crack completes at 0.7–1.4 mm; 3 mm wastes ~half the run).
 3. Convergence at the reference law (h_coh, increment, viscosity) → ε_num.
 4. Phase 1A sweep design over (G_c, σ_c, α) within the bounds.
 
 ## Open questions for the user
 
-- c in ℓ_pz ≤ c·H (proposed 1) — decide after seeing the map.
+- c in ℓ_cz ≤ c·H: c = 0.5 / 1 / 1.5 gives σ_c,min (G_c 0.4) = 36 / 21 / 14 MPa.
 - α range for Phase 1 (now that α < 0 works): e.g. −3 … 7?
 - Noise model and P–Δ sampling (RESEARCH_PLAN §7).
 - Figures follow `FIGURE_DESIGN.md` (IJF guide) conventions unless told otherwise.

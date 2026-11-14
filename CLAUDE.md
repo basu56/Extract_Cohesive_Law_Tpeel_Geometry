@@ -76,7 +76,7 @@ bridging or multi-stage laws yet; Phase 1 uses the one-parameter shape family in
   - GitHub access: SSH only (`git@github.com:...`). HTTPS has no credentials, and Negishi
     has no GitHub key: push from Bell, and sync Negishi through a bare repo on Negishi
     scratch (same pattern as `TPeel_cohesive_zone`)
-  - Licence-token limits: TBD
+  - Licence: shared ECN FlexNet; in practice ~12 concurrent 1-cpu Standard jobs, the rest queue ("license request queued")
   - Cost reference: ~15 min per fracture run (campaign03 decks)
 
 ## Repository layout (target)

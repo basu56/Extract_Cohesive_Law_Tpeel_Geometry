@@ -171,3 +171,8 @@ to 2 digits), but ℓ_cz ≠ ℓ_ch: ℓ_cz/ℓ_ch = 0.02–0.14. Since the map 
 ℓ_cz ≤ c H is equivalent to bounding ℓ_ch/H ≤ f⁻¹(c). With c = 1 this gives ℓ_ch/H ≈ 11.6 and
 σ_c,min ≈ 10.3 / 16.4 / 20.7 MPa at G_c = 0.1 / 0.25 / 0.4 [preliminary; c not yet agreed].
 Status: approach agreed; c and the α-dependence pending.
+
+## 2026-11-14 — D12 update: pilot complete (α = 0)
+All 21 pilot runs complete. ℓ_cz/H = f(ℓ_ch/H) holds to ≤ 0.4 % across G_c. With c = 1:
+ℓ_ch/H ≤ 11.3, σ_c,min = 10.5 / 16.6 / 21.0 MPa at G_c = 0.1 / 0.25 / 0.4
+(`results/phase0/pz_map/`). Status: c and the α-dependence still pending the user.
