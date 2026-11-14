@@ -96,3 +96,11 @@ Measured on 6 pilot runs, using the opening-based tip (δ = δ_f) vs SDEG 0.99:
 0.41 → 0.42 (0.4, 40).
 **The SDEG-based ℓ_pz values in earlier notes must not be used.** Definitions proposed
 to the user (D14, pending): see STATUS.md.
+
+## Continuation 4 (late evening) — convergence + dense σ_c sweep
+- Convergence study (SLURM 45824413, 11/11): error floor ≤ 0.04 % of P_peak; production settings D16.
+- Dense σ_c sweep at G_c 0.4, α 0 (SLURM 45831057, 9/9): P_peak −8.4 … +3.8 % about σ_c 40, initial
+  slope identical, post-peak P–Δ identical to ≤ 0.21 % → `results/phase1a_sigc/README.md`.
+- User asked why runs are slow. Answer: adherend mesh follows h_coh (26k CPE4I) plus full-field output
+  every increment; not ℓ_cz ≪ H (≥ 11 el per ℓ_cz, mesh converged). Speed-ups proposed, not applied.
+- User is checking Claude Web access to the repo before the next step.

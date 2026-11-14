@@ -1,6 +1,6 @@
 # Project status (handoff page)
 
-_Last updated: 2026-11-14 (evening) by Claude Code. Overwrite this page each session._
+_Last updated: 2026-11-14 (late evening) by Claude Code. Overwrite this page each session._
 
 ## Where we are
 
@@ -46,11 +46,20 @@ away from the peak. σ_c information is confined to δ ≲ 0.4 mm.
 
 Nothing.
 
+## Runtime note
+A base run takes ~20–25 min on 1 CPU. The cost is 26k CPE4I elements (adherend columns follow
+h_coh = 0.1 through the full arm thickness) and full-model U/RF field output every increment
+(~390 MB odb). ℓ_cz is NOT the cause: ≥ 11 elements per ℓ_cz at h = 0.1, and h = 0.05 changes
+nothing. Speed-ups before large data sets: thin the output (no physics change); a fine bond-line
+strip with coarser tied arms (needs a convergence check).
+
 ## Next actions
 
+0. User is checking that Claude Web can read the repo before the next step.
 1. α at fixed (G_c 0.4, σ_c 40): needs the user's α range (proposal −3 … 7).
 2. Possibly repeat the σ_c sweep at G_c 0.1 and 0.25 (same design) to show the result holds across G_c.
-3. User: ℓ_pz definition.
+3. Speed up the model (output thinning, then mesh grading + check) before generating data sets.
+4. User: ℓ_pz definition.
 
 Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leave it).
 

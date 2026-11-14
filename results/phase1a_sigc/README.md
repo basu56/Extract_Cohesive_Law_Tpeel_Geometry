@@ -53,3 +53,39 @@ Findings [D]:
 3. Pre-peak: lower σ_c gives an earlier departure from linearity (panel b, up to −12 % at δ ≈ 0.18).
 [I] The P–Δ information about σ_c is confined to the peak region (δ ≲ 0.4 mm); steady peeling
 carries G_c only. This is the non-uniqueness of D15 in its first controlled form.
+
+---
+
+# Dense σ_c sweep at fixed G_c = 0.40 N/mm, α = 0 (D15, production settings D16)
+
+Source: Negishi SLURM 45831057, `scripts/phase1/run_sigc_sweep.sh`, rundir
+`/scratch/negishi/basu56/tslid_runs/phase1a_sigc_sweep/` (9/9 completed). h_coh 0.1, viscosity 1e-4,
+n_inc 800, Δ = 1.6 mm. Reference σ_c = 40. Post-peak window 0.262–1.338 mm.
+Files: `gc040_sigc_sweep.png/pdf`, `gc040_sigc_sweep_summary.csv`, `sweep_energy_summary.csv`.
+
+| σ_c (MPa) | ℓ_cz (mm) | ℓ_cz/H | P_peak (N) | ΔP_peak | Δδ_peak | max post-peak \|ΔP\|/P_pk | rms |
+|---|---|---|---|---|---|---|---|
+| 21 | 6.33 | 1.00 | 514.7 | −8.43 % | +12.3 % | 0.21 % | 0.07 % |
+| 25 | 5.23 | 0.83 | 528.7 | −5.93 % | +8.2 % | 0.14 % | 0.05 % |
+| 30 | 4.17 | 0.66 | 542.5 | −3.49 % | +4.1 % | 0.08 % | 0.02 % |
+| 35 | 3.35 | 0.53 | 553.3 | −1.56 % | +2.1 % | 0.04 % | 0.01 % |
+| 40 | 2.69 | 0.42 | 562.1 | ref | ref | ref | ref |
+| 45 | 2.14 | 0.34 | 569.3 | +1.29 % | −2.1 % | 0.04 % | 0.01 % |
+| 50 | 1.68 | 0.27 | 575.3 | +2.35 % | −4.1 % | 0.06 % | 0.01 % |
+| 55 | 1.29 | 0.20 | 580.8 | +3.32 % | −5.1 % | 0.08 % | 0.01 % |
+| 58 | 1.08 | 0.17 | 583.2 | +3.76 % | −5.1 % | 0.06 % | 0.02 % |
+
+Energy checks, all runs: E4 ≤ 1.9e-5, E5 ≤ 1.0e-4, E6 −0.04 … −0.32 %.
+Error floor (`results/phase0/convergence/`, D16): ≤ 0.04 % of P_peak.
+
+[D] Same G_c and a 2.8× range in σ_c (ℓ_cz 1.1–6.3 mm):
+- the initial slope is identical (≤ 0.08 %);
+- P_peak increases monotonically with σ_c, by −8.4 % … +3.8 % about σ_c = 40, and the
+  sensitivity falls as σ_c rises (dP_peak/dσ_c ≈ 3.5 N/MPa at 21–25 vs 0.8 N/MPa at 55–58);
+- the propagation branch is the same curve: the post-peak difference is ≤ 0.21 % (rms ≤ 0.07 %).
+  It is above the floor (0.04 %) only for σ_c ≤ 30, and is largest just after the peak
+  (panel b). The largest pointwise difference (−12 %, σ_c = 21) is on the rising branch just before the peak.
+
+[I] At fixed G_c, P–Δ carries information about σ_c only in the region around the peak, about
+δ ≈ 0.1–0.25 mm. Steady propagation is set by G_c alone. σ_c is therefore weakly identifiable,
+and less so at high σ_c, where P_peak saturates. This is the non-uniqueness to quantify in Phase 1.
