@@ -62,3 +62,22 @@ both a dataset quality check and a structural prior for the inversion. E9 frames
 identifiability as energy vs energy partition vs shape at fixed energy.
 
 **Open:** σ_c bounds, source of E_a, D11, tolerances (see STATUS.md).
+
+---
+
+## Continuation 2 — first simulations (Negishi)
+
+**User decisions:** K = 8500 agreed; D11 agreed; tolerances agreed; σ_c lower bound to be
+set from the physical process-zone size (ℓ_c should not be much larger than H) → D12;
+Bell stopped, compute on Negishi → D13.
+
+**Done:**
+- Imported generator/extractor/runner verbatim (a91db9e), then added `--law alpha`, D11
+  defaults, laws.py + tests, single-element tools, energy_checks.py, pilot runner.
+- Negishi bare-repo mirror + clone set up (see CLAUDE.md cluster section).
+- Single-element verification: SLURM 45820961 **failed** (runner path / module bug, no
+  analysis ran); fixed; 45820978 **passed 14/14** [D] — see `results/phase0/single_element/`.
+- Pilot ℓ_pz map submitted: SLURM 45821190.
+
+**Note:** `FIGURE_DESIGN.md` (user's IJF figure guide, added by the user) was swept into
+commit 55858b6 by `git add -A`. From now on files are staged by name.

@@ -145,3 +145,10 @@ Bell compute was stopped by Purdue. All ABAQUS and heavy Python runs on Negishi
 (`/scratch/negishi/basu56/repo/Extract_Cohesive_Law_Tpeel_Geometry.git`, remote
 `negishi`), cloned at `/scratch/negishi/basu56/Extract_Cohesive_Law_Tpeel_Geometry`.
 Runs go in `/scratch/negishi/basu56/tslid_runs/<study>/`. Status: **agreed**.
+
+## 2026-11-14 — D8 update: hypothesis confirmed by the single-element test
+ABAQUS EXPONENTIAL softening reproduces s(x; α) to 1e-7 σ_c, including α = −2, and
+TABULAR (1000 rows) to 1.6e-5 σ_c; dissipation = G_c within 1e-5
+(`results/phase0/single_element/`). Truth: EXPONENTIAL (LINEAR for α = 0) on a finer
+mesh; inversion: TABULAR / piecewise-linear. D8 status → **agreed in principle,
+verified**; the α range can include α < 0. Final confirmation by the user pending.
