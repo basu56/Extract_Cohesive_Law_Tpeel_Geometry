@@ -23,9 +23,12 @@ Running:
 
 ## Warning — zone lengths
 
-ℓ_pz values from the SDEG 0.99/0 fronts (pilot preview, campaign03 Stage F) **underestimate**
-the softening zone by up to ~25 %, with a bias that depends on σ_c and α. Opening-based
-definitions are proposed (D14, awaiting user). See the session log, continuation 3.
+SDEG-based lengths (pilot preview, campaign03 Stage F) **underestimate** the zone by up to
+~25 %. Use ℓ_cz from the opening profile (D14, agreed). ℓ_pz is undefined until the user
+settles it.
+
+Pilot preview [D, α = 0, 17 runs]: ℓ_cz/H collapses onto one curve in ℓ_ch/H:
+ℓ_ch/H 1.5 / 3.1 / 5.5 / 12.4 / 50 → ℓ_cz/H 0.18 / 0.42 / 0.66 / 1.05 / 1.94.
 
 ## Next actions
 

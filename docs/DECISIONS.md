@@ -152,3 +152,22 @@ TABULAR (1000 rows) to 1.6e-5 σ_c; dissipation = G_c within 1e-5
 (`results/phase0/single_element/`). Truth: EXPONENTIAL (LINEAR for α = 0) on a finer
 mesh; inversion: TABULAR / piecewise-linear. D8 status → **agreed in principle,
 verified**; the α range can include α < 0. Final confirmation by the user pending.
+
+## 2026-11-14 — D14: Zone-length definitions (partly agreed)
+- **ℓ_cz (agreed):** distance from the point where the traction equals σ_c (δ = δ_0) to
+  the traction-free point (δ = δ_f) in the regularized field. It is measured from the
+  nodal opening profile during steady propagation. This is the length the user calls
+  "process zone / ℓ_c" in the manuscript figure (σ_yy along the crack line, Griffith vs
+  cohesive). In this repo it is always written ℓ_cz.
+- **ℓ_pz (open):** an energy-based dissipation length was proposed (onset to w(δ) = q G_c).
+  The user is reviewing the literature; the definition and q are not agreed. Do not use
+  ℓ_pz until settled.
+- SDEG-threshold fronts (campaign03 extractor) are **not** used for any zone length (bias up to ~25 %).
+
+## 2026-11-14 — D12 update: σ_c lower bound via ℓ_cz or ℓ_ch
+User: set the lower bound from ℓ_cz or from ℓ_ch. Pilot result [D, α = 0]: ℓ_cz/H is a
+single function of ℓ_ch/H (runs at different G_c with the same ℓ_ch/H give the same ℓ_cz/H
+to 2 digits), but ℓ_cz ≠ ℓ_ch: ℓ_cz/ℓ_ch = 0.02–0.14. Since the map is one-to-one, bounding
+ℓ_cz ≤ c H is equivalent to bounding ℓ_ch/H ≤ f⁻¹(c). With c = 1 this gives ℓ_ch/H ≈ 11.6 and
+σ_c,min ≈ 10.3 / 16.4 / 20.7 MPa at G_c = 0.1 / 0.25 / 0.4 [preliminary; c not yet agreed].
+Status: approach agreed; c and the α-dependence pending.
