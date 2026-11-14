@@ -176,3 +176,16 @@ Status: approach agreed; c and the α-dependence pending.
 All 21 pilot runs complete. ℓ_cz/H = f(ℓ_ch/H) holds to ≤ 0.4 % across G_c. With c = 1:
 ℓ_ch/H ≤ 11.3, σ_c,min = 10.5 / 16.6 / 21.0 MPa at G_c = 0.1 / 0.25 / 0.4
 (`results/phase0/pz_map/`). Status: c and the α-dependence still pending the user.
+
+## 2026-11-14 — D12 update: c = 1 adopted
+User: take c = 1 for now (ℓ_cz ≤ H). At G_c = 0.4, α = 0: σ_c ∈ [21.0, 58.3] MPa
+(lower bound from ℓ_cz = H, upper bound from E2). Status: **agreed (provisional)**.
+
+## 2026-11-14 — D15: One-parameter studies — vary σ_c at fixed G_c
+Decision (user): change one parameter at a time. The first study keeps G_c = 0.40 N/mm
+and α = 0 fixed and varies σ_c only, within the D12 bounds.
+Rationale: attributes any change in P–Δ to σ_c alone. Goal: show that laws with the same
+G_c but different σ_c (different cohesive laws, the same energy) give nearly the same P–Δ,
+with a small change in peak load. This is the first, controlled demonstration of
+non-uniqueness. It must be measured against the numerical error floor (rule 5).
+Status: **agreed**.
