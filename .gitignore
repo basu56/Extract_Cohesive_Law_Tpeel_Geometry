@@ -1,0 +1,30 @@
+# ABAQUS raw outputs (keep on scratch, never in git)
+*.odb
+*.odb_f
+*.dat
+*.msg
+*.res
+*.prt
+*.mdl
+*.stt
+*.sim
+*.lck
+*.ipm
+*.com
+*.abq
+*.pac
+*.sel
+*.023
+*.SMABulk
+*.sta
+*.log
+# compiled user subroutines
+*.o
+*.so
+# Python
+__pycache__/
+*.pyc
+.venv/
+# large data
+results/raw/
+*.h5
