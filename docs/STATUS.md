@@ -37,17 +37,20 @@ Production: h_coh 0.1, viscosity 1e-4, n_inc 800, Δ 1.6 (D16).
 First result (D15, pilot runs, viscosity 1e-3): `results/phase1a_sigc/` — at G_c 0.4, σ_c 25–57
 changes P_peak by −5.8 … +3.5 % (≫ floor), post-peak P–Δ differs by ≤ 0.12 % (≈ floor).
 
+## Done: dense σ_c sweep (D15) — `results/phase1a_sigc/` (second section of README)
+G_c 0.4, α 0, σ_c 21–58, production settings, 9/9 runs, all energy checks pass. P_peak −8.4 … +3.8 %
+vs σ_c 40; post-peak P–Δ identical to ≤ 0.21 % (σ_c ≥ 30: ≤ 0.08 %, ≈ floor); the residual decays
+away from the peak. σ_c information is confined to δ ≲ 0.4 mm.
+
 ## Running
 
-- **Dense σ_c sweep** (D15), Negishi SLURM 45831057,
-  `/scratch/negishi/basu56/tslid_runs/phase1a_sigc_sweep/`, `scripts/phase1/run_sigc_sweep.sh`:
-  G_c 0.4, α 0, σ_c 21 25 30 35 40 45 50 55 58, production settings; reference σ_c 40.
+Nothing.
 
 ## Next actions
 
-1. Analyse the sweep: P_peak(σ_c), post-peak difference vs the floor; archive in `results/phase1a_sigc/`.
-2. Then α at fixed (G_c, σ_c) — one parameter at a time (D15).
-3. User: ℓ_pz definition; α range.
+1. α at fixed (G_c 0.4, σ_c 40): needs the user's α range (proposal −3 … 7).
+2. Possibly repeat the σ_c sweep at G_c 0.1 and 0.25 (same design) to show the result holds across G_c.
+3. User: ℓ_pz definition.
 
 Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leave it).
 
