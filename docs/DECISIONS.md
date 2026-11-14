@@ -189,3 +189,9 @@ G_c but different σ_c (different cohesive laws, the same energy) give nearly th
 with a small change in peak load. This is the first, controlled demonstration of
 non-uniqueness. It must be measured against the numerical error floor (rule 5).
 Status: **agreed**.
+
+## 2026-11-14 — D16: Production numerical settings (from the convergence study)
+h_coh 0.1 mm (≥ 11 elements per ℓ_cz at σ_c = 58), viscosity 1e-4 s, n_inc 800, Δ = 1.6 mm.
+Evidence: `results/phase0/convergence/`. Mesh/increment error on P ≤ 0.04 % of P_peak;
+viscosity 1e-3 biases P by ≈ 0.1 % after the peak; 1e-4 vs 1e-5 differ by < 0.01 %.
+Status: **adopted by Claude Code** (numerical; within the agreed tolerances D10).
