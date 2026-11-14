@@ -81,3 +81,18 @@ Bell stopped, compute on Negishi → D13.
 
 **Note:** `FIGURE_DESIGN.md` (user's IJF figure guide, added by the user) was swept into
 commit 55858b6 by `git add -A`. From now on files are staged by name.
+
+---
+
+## Continuation 3 — zone-length definitions (user flagged as very important)
+
+**Problem found [D]:** the "ℓ_pz" reported for the pilot preview came from campaign03's
+extractor: the distance between the SDEG > 0 front and the SDEG ≥ 0.99 front, element-wise.
+SDEG is stiffness degradation, not traction loss. With K = 8500, D = 0.99 is reached at
+δ = 0.60 δ_f for (G_c 0.4, σ_c 10, α 0), where 41 % of σ_c still acts and 16 % of G_c is
+not yet dissipated. For α = 7, 15 % of G_c remains. The bias therefore depends on σ_c and α.
+Measured on 6 pilot runs, using the opening-based tip (δ = δ_f) vs SDEG 0.99:
+ℓ/H 1.44 → 1.93 (G_c 0.4, σ_c 10), 1.30 → 1.60 (0.25, 10), 0.99 → 1.11 (0.25, 15),
+0.41 → 0.42 (0.4, 40).
+**The SDEG-based ℓ_pz values in earlier notes must not be used.** Definitions proposed
+to the user (D14, pending): see STATUS.md.

@@ -21,6 +21,12 @@ Running:
   α = 0, G_c ∈ {0.1, 0.25, 0.4}, σ_c ∈ {5…57} up to the E2 cap (21 runs). Output:
   ℓ_pz/H(G_c, σ_c) → σ_c,min (D12); E4–E6 energy checks per run; elements per ℓ_pz.
 
+## Warning — zone lengths
+
+ℓ_pz values from the SDEG 0.99/0 fronts (pilot preview, campaign03 Stage F) **underestimate**
+the softening zone by up to ~25 %, with a bias that depends on σ_c and α. Opening-based
+definitions are proposed (D14, awaiting user). See the session log, continuation 3.
+
 ## Next actions
 
 1. Analyse the pilot: ℓ_pz/H map, σ_c,min(G_c) for c = 1, energy checks, mesh resolution.
