@@ -1,6 +1,6 @@
 # Project status (handoff page)
 
-_Last updated: 2026-11-14 (afternoon) by Claude Code. Overwrite this page each session._
+_Last updated: 2026-11-14 (evening) by Claude Code. Overwrite this page each session._
 
 ## Where we are
 
@@ -29,26 +29,30 @@ settles it.
 Pilot preview [D, α = 0, 17 runs]: ℓ_cz/H collapses onto one curve in ℓ_ch/H:
 ℓ_ch/H 1.5 / 3.1 / 5.5 / 12.4 / 50 → ℓ_cz/H 0.18 / 0.42 / 0.66 / 1.05 / 1.94.
 
+## Done (evening): convergence study — `results/phase0/convergence/`, D16
+Error floor [D]: mesh and increment change P by ≤ 0.04 % of P_peak; viscosity 1e-3 biases P by
+≈ 0.1 % just after the peak; 1e-4 ≡ 1e-5 (< 0.01 %). All energy checks pass (E4 ≤ 5.4e-5).
+Production: h_coh 0.1, viscosity 1e-4, n_inc 800, Δ 1.6 (D16).
+
+First result (D15, pilot runs, viscosity 1e-3): `results/phase1a_sigc/` — at G_c 0.4, σ_c 25–57
+changes P_peak by −5.8 … +3.5 % (≫ floor), post-peak P–Δ differs by ≤ 0.12 % (≈ floor).
+
 ## Running
 
-- **Convergence study** (numerical error floor), Negishi SLURM 45824413,
-  `/scratch/negishi/basu56/tslid_runs/phase0_convergence/`: G_c 0.4, α 0, Δ 1.6 mm;
-  σ_c 40 / 58 / 21 × {base h 0.1, h 0.05, h 0.025 (40, 58), n_inc 1600, visc 1e-4, 1e-5 (40)}.
+- **Dense σ_c sweep** (D15), Negishi SLURM 45831057,
+  `/scratch/negishi/basu56/tslid_runs/phase1a_sigc_sweep/`, `scripts/phase1/run_sigc_sweep.sh`:
+  G_c 0.4, α 0, σ_c 21 25 30 35 40 45 50 55 58, production settings; reference σ_c 40.
 
 ## Next actions
 
-1. Error floor ε_num from the convergence study → choose production settings.
-2. Dense σ_c sweep at G_c 0.4, α 0 within [21, 58.3] MPa (D15), with the production
-   settings and finer increments near the peak; compare peak and post-peak differences with ε_num.
-3. Then α at fixed (G_c, σ_c) — one parameter at a time (D15).
-4. User: ℓ_pz definition; α range.
+1. Analyse the sweep: P_peak(σ_c), post-peak difference vs the floor; archive in `results/phase1a_sigc/`.
+2. Then α at fixed (G_c, σ_c) — one parameter at a time (D15).
+3. User: ℓ_pz definition; α range.
 
-First result (D15, pilot runs): `results/phase1a_sigc/` — at G_c 0.4, σ_c 25–57 changes P_peak
-by −5.8 … +3.5 %, while the post-peak P–Δ is identical to ≤ 0.12 % (error floor pending).
+Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leave it).
 
 ## Open questions for the user
 
-- c in ℓ_cz ≤ c·H: c = 0.5 / 1 / 1.5 gives σ_c,min (G_c 0.4) = 36 / 21 / 14 MPa.
 - α range for Phase 1 (now that α < 0 works): e.g. −3 … 7?
 - Noise model and P–Δ sampling (RESEARCH_PLAN §7).
 - Figures follow `FIGURE_DESIGN.md` (IJF guide) conventions unless told otherwise.
