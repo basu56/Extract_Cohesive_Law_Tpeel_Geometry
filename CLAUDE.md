@@ -66,8 +66,13 @@ bridging or multi-stage laws yet; Phase 1 uses the one-parameter shape family in
     need `bash -lc` so the module system loads. Abaqus 2025 (used on Bell) is not
     installed on Negishi; an unchanged re-run gave identical results on 2025 and 2026.
   - SLURM account / partition: `--account=tomar --partition=cpu` (64 cores)
-  - Scratch root: `/scratch/negishi/basu56/` (runs); repo clone on Bell scratch at
-    `/scratch/bell/basu56/Extract_Cohesive_Law_Tpeel_Geometry`
+  - Scratch root: `/scratch/negishi/basu56/`; runs in `tslid_runs/<study>/`; Negishi clone
+    `/scratch/negishi/basu56/Extract_Cohesive_Law_Tpeel_Geometry` (pulls from the bare repo
+    `repo/Extract_Cohesive_Law_Tpeel_Geometry.git`). GitHub-connected clone:
+    `/scratch/bell/basu56/Extract_Cohesive_Law_Tpeel_Geometry` (remotes `origin` = GitHub,
+    `negishi` = bare repo). Workflow: commit on Bell → push origin + negishi → `git pull` on Negishi.
+  - Submit from the Negishi repo root (scripts find the repo via `SLURM_SUBMIT_DIR`); batch
+    scripts use `#!/bin/bash -l` so `module` works.
   - GitHub access: SSH only (`git@github.com:...`). HTTPS has no credentials, and Negishi
     has no GitHub key: push from Bell, and sync Negishi through a bare repo on Negishi
     scratch (same pattern as `TPeel_cohesive_zone`)

@@ -126,9 +126,12 @@ def check_law(o):
     if o.law == 'elastic':
         return {}
     if o.law == 'alpha':
-        lw = AlphaLaw(o.K0, o.sigc, o.Gc, o.alpha)
-        lw.check_energy_constraints()                       # E2, E3
-        cards, rep = lw.abaqus_cards(o.softening, o.n_tab)  # E1
+        try:
+            lw = AlphaLaw(o.K0, o.sigc, o.Gc, o.alpha)
+            lw.check_energy_constraints()                       # E2, E3
+            cards, rep = lw.abaqus_cards(o.softening, o.n_tab)  # E1
+        except ValueError as e:
+            sys.exit('%s: law rejected -- %s' % (o.job, e))
         d = dict(sig=o.sigc, G=o.Gc, K=o.K0, d0=lw.d0, df=lw.df, alpha=o.alpha,
                  phi_e=lw.phi_e, representation=rep)
         d['cards'] = cards

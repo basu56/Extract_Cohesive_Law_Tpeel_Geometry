@@ -114,3 +114,34 @@ closes cleanly and the dissipated energy can be checked directly against G_c × 
 default: H = 6.324, t = 0.4, W = 15, clamp/load, a0 = 18 mm (the user's preferred
 1 mm precrack).
 Status: proposed — awaiting user confirmation.
+
+## 2026-11-14 — D9 update: K confirmed
+User confirmed K = 8500 MPa/mm. D9 K entry → **agreed**.
+
+## 2026-11-14 — D10 update: tolerances accepted
+User accepted the proposed tolerances: E1 1e-4 (relative), E2 φ_e ≤ 0.5, E4 1 %,
+E5 1 %, E6 2 %. Status → **agreed**.
+
+## 2026-11-14 — D11 update: elastic adherends, a0 = 18 mm
+User agreed. Implemented as generator defaults (H = 6.324, a0 = 18, elastic).
+Status → **agreed**.
+
+## 2026-11-14 — D12: σ_c lower bound from the physical process-zone size
+Decision (user): σ_c has no well-established lower bound from strength data. Instead,
+bound it physically: lower σ_c lengthens the process zone, and a process zone much
+longer than the adherend thickness H makes the problem physically not meaningful.
+Lower bound: σ_c,min(G_c, α) is the strength at which the FE-measured steady-state
+process-zone length reaches ℓ_pz = c·H. Proposed c = 1, to be revisited once the pilot
+map exists. Note that ℓ_ch = E′G_c/σ_c² is not ℓ_pz (Stage F: ℓ_ch/H ≈ 12 gave
+ℓ_pz/H ≈ 0.87), so the bound is set from FE, not from ℓ_ch.
+Upper bound: E2 gives σ_c ≤ √(K G_c) (29 / 46 / 58 MPa at G_c = 0.1 / 0.25 / 0.4).
+A practical limit also comes from mesh resolution (≥ 3–5 cohesive elements in ℓ_pz).
+Status: principle **agreed**; c = 1 proposed; values from the pilot map
+(`scripts/phase0/run_pz_map.sh`).
+
+## 2026-11-14 — D13: Compute on Negishi only
+Bell compute was stopped by Purdue. All ABAQUS and heavy Python runs on Negishi
+(`--account=tomar --partition=cpu`). The repo is mirrored to a bare repo on Negishi
+(`/scratch/negishi/basu56/repo/Extract_Cohesive_Law_Tpeel_Geometry.git`, remote
+`negishi`), cloned at `/scratch/negishi/basu56/Extract_Cohesive_Law_Tpeel_Geometry`.
+Runs go in `/scratch/negishi/basu56/tslid_runs/<study>/`. Status: **agreed**.
