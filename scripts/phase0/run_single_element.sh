@@ -1,12 +1,12 @@
-#!/bin/bash
+#!/bin/bash -l
 # Phase 0, step 3: single cohesive-element verification of the alpha-law representations.
-#   sbatch --account=tomar --partition=cpu --ntasks=1 --cpus-per-task=8 --time=01:00:00 \
+#   (from the repo root) sbatch --account=tomar --partition=cpu --ntasks=1 --cpus-per-task=8 --time=01:00:00 \
 #          --job-name=tsl_se --output=<rundir>/slurm-%j.out \
 #          scripts/phase0/run_single_element.sh <rundir>
 # Reference law: K = 8500 MPa/mm, sigc = 20 MPa, Gc = 0.4 N/mm (phi_e = 0.06);
 # a high-strength case Gc = 0.1, sigc = 29 (phi_e = 0.49, near the E2 limit).
 set -u
-REPO=$(cd "$(dirname "$0")/../.." && pwd)
+REPO=${TSLID_REPO:-${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}}   # submit from the repo root
 DIR=${1:?rundir}
 mkdir -p "$DIR" && cd "$DIR" || exit 1
 SE="python3 $REPO/src/tslid/single_element.py --outdir ."
@@ -27,6 +27,7 @@ H="--sigc 29 --Gc 0.1"
 $SE --job se_hi_exp_a3 $H --alpha 3 --softening exponential
 $SE --job se_hi_tab_a3 $H --alpha 3 --softening tabular
 
+module load intel/19.1.3.304 abaqus/2026 >/dev/null 2>&1
 bash "$REPO/scripts/slurm/run_abaqus_dir.sh" "$DIR" 'se_*' 1
 module load intel/19.1.3.304 abaqus/2026 >/dev/null 2>&1
 for odb in se_*.odb; do
