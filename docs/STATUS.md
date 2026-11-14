@@ -45,7 +45,7 @@ away from the peak. σ_c information is confined to δ ≲ 0.4 mm.
 ## Running
 
 - **α sweep** (D17): G_c 0.4, σ_c 40 and 21, α −3 … 7 (14 runs), `scripts/phase1/run_alpha_sweep.sh`,
-  rundir `/scratch/negishi/basu56/tslid_runs/phase1b_alpha_sweep/` (SLURM id in the session log).
+  rundir `/scratch/negishi/basu56/tslid_runs/phase1b_alpha_sweep/` SLURM 45840508.
 
 ## Runtime note
 A base run takes ~20–25 min on 1 CPU. The cost is 26k CPE4I elements (adherend columns follow

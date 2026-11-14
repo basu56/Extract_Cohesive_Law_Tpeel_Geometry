@@ -104,3 +104,4 @@ to the user (D14, pending): see STATUS.md.
 - User asked why runs are slow. Answer: adherend mesh follows h_coh (26k CPE4I) plus full-field output
   every increment; not ℓ_cz ≪ H (≥ 11 el per ℓ_cz, mesh converged). Speed-ups proposed, not applied.
 - User is checking Claude Web access to the repo before the next step.
+- α sweep (D17) submitted: Negishi SLURM 45840508, 14 runs, rundir /scratch/negishi/basu56/tslid_runs/phase1b_alpha_sweep/.
