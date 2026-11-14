@@ -29,13 +29,22 @@ settles it.
 Pilot preview [D, α = 0, 17 runs]: ℓ_cz/H collapses onto one curve in ℓ_ch/H:
 ℓ_ch/H 1.5 / 3.1 / 5.5 / 12.4 / 50 → ℓ_cz/H 0.18 / 0.42 / 0.66 / 1.05 / 1.94.
 
+## Running
+
+- **Convergence study** (numerical error floor), Negishi SLURM 45824413,
+  `/scratch/negishi/basu56/tslid_runs/phase0_convergence/`: G_c 0.4, α 0, Δ 1.6 mm;
+  σ_c 40 / 58 / 21 × {base h 0.1, h 0.05, h 0.025 (40, 58), n_inc 1600, visc 1e-4, 1e-5 (40)}.
+
 ## Next actions
 
-1. User: choose c (ℓ_cz ≤ c·H) and the α range; define ℓ_pz (evening).
-2. ℓ_cz map for α ≠ 0 at a few ℓ_ch/H values (shape shifts the curve).
-2b. Shorten the prescribed Δ (crack completes at 0.7–1.4 mm; 3 mm wastes ~half the run).
-3. Convergence at the reference law (h_coh, increment, viscosity) → ε_num.
-4. Phase 1A sweep design over (G_c, σ_c, α) within the bounds.
+1. Error floor ε_num from the convergence study → choose production settings.
+2. Dense σ_c sweep at G_c 0.4, α 0 within [21, 58.3] MPa (D15), with the production
+   settings and finer increments near the peak; compare peak and post-peak differences with ε_num.
+3. Then α at fixed (G_c, σ_c) — one parameter at a time (D15).
+4. User: ℓ_pz definition; α range.
+
+First result (D15, pilot runs): `results/phase1a_sigc/` — at G_c 0.4, σ_c 25–57 changes P_peak
+by −5.8 … +3.5 %, while the post-peak P–Δ is identical to ≤ 0.12 % (error floor pending).
 
 ## Open questions for the user
 
