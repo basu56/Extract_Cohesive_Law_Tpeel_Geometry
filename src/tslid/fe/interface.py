@@ -36,6 +36,7 @@ import numpy as np
 
 from .laws_jax import damage as damage_alpha
 from .laws_jax import envelope_integral as envelope_alpha
+from .laws_jax import law_params as law_params_alpha
 
 GAUSS2 = (np.array([-1.0, 1.0]) / np.sqrt(3.0), np.array([1.0, 1.0]))
 NODAL2 = (np.array([-1.0, 1.0]), np.array([1.0, 1.0]))
@@ -85,6 +86,10 @@ class AlphaLawParams:
     def d0(self):
         return self.sigc / self.K0
 
+    @property
+    def df(self):
+        return law_params_alpha(self.K0, self.sigc, self.Gc, self.alpha)[1]
+
     def envelope_integral(self, d):
         """int_{d0}^{d} T(s) ds, d >= d0 (closed form, laws_jax.envelope_integral)."""
         return envelope_alpha(d, self.K0, self.sigc, self.Gc, self.alpha)
@@ -129,6 +134,71 @@ class TabularLawParams:
         k = jnp.clip(jnp.searchsorted(jnp.asarray(sk), dc, side="right") - 1, 0, len(m) - 1)
         ck, mk, s0 = jnp.asarray(c)[k], jnp.asarray(m)[k], jnp.asarray(sk)[k]
         return jnp.asarray(C)[k] + self.K0 * (ck * (dc ** 2 - s0 ** 2) / 2 - mk * (dc ** 3 - s0 ** 3) / 3)
+
+
+@dataclass(frozen=True)
+class PiecewiseLawParams:
+    """Piecewise-linear traction envelope with the knot tractions as parameters (S5b many-parameter
+    law; chosen over TabularLawParams, whose envelope integral is built in NumPy from the table and is
+    not differentiable in the table values).
+
+    Leaves (differentiable): K0 (MPa/mm), sigc (MPa), t (m-1 interior knot tractions, MPa).
+    Static: u (m+1 knot offsets u_0 = 0 < ... < u_m from d0, mm).  Knots s_k = d0 + u_k, d0 = sigc/K0:
+        T = K0 d (d <= d0);  linear through (s_0, sigc), (s_k, t_k), (s_m, 0);  0 beyond df = s_m.
+    D(d) = 1 - T(d)/(K0 d); F(d) = int_{d0}^{d} T exactly (trapezoids + partial segment), so the
+    incremental potential is closed-form and differentiable in every leaf.  G_c = sigc d0/2 + F(df)."""
+    K0: object
+    sigc: object
+    t: object
+    u: tuple
+
+    @classmethod
+    def from_alpha(cls, law, m):
+        """m equal segments on [d0, df] of an AlphaLawParams, knot tractions from its envelope."""
+        from .laws_jax import traction as traction_alpha
+        d0, df = float(law.d0), float(law.df)
+        u = tuple(float(x) for x in np.linspace(0.0, df - d0, m + 1))
+        t = np.array([float(traction_alpha(d0 + x, law.K0, law.sigc, law.Gc, law.alpha)) for x in u[1:-1]])
+        return cls(float(law.K0), float(law.sigc), jnp.asarray(t), u)
+
+    @property
+    def d0(self):
+        return self.sigc / self.K0
+
+    @property
+    def df(self):
+        return self.d0 + self.u[-1]
+
+    def _knots(self):
+        s = self.d0 + jnp.asarray(self.u)
+        T = jnp.concatenate([jnp.reshape(self.sigc, (1,)), jnp.asarray(self.t), jnp.zeros(1)])
+        return s, T
+
+    def _segment(self, d):
+        s, T = self._knots()
+        dc = jnp.clip(d, s[0], s[-1])
+        k = jnp.clip(jnp.searchsorted(s, dc, side="right") - 1, 0, len(self.u) - 2)
+        Td = T[k] + (T[k + 1] - T[k]) * (dc - s[k]) / (s[k + 1] - s[k])
+        return s, T, dc, k, Td
+
+    def damage(self, dmax):
+        s, T, dc, k, Td = self._segment(dmax)
+        soft = (dmax > s[0]) & (dmax < s[-1])
+        d_safe = jnp.where(soft, dmax, s[-1])
+        Ds = 1.0 - jnp.where(soft, Td, 0.0) / (self.K0 * d_safe)
+        return jnp.where(dmax <= s[0], 0.0, jnp.where(dmax >= s[-1], 1.0, Ds))
+
+    def envelope_integral(self, d):
+        s, T, dc, k, Td = self._segment(d)
+        C = jnp.concatenate([jnp.zeros(1), jnp.cumsum(0.5 * (T[1:] + T[:-1]) * jnp.diff(s))])
+        return C[k] + 0.5 * (T[k] + Td) * (dc - s[k])
+
+    @property
+    def Gc(self):
+        return 0.5 * self.sigc * self.d0 + self.envelope_integral(self.df)
+
+
+jax.tree_util.register_dataclass(PiecewiseLawParams, data_fields=["K0", "sigc", "t"], meta_fields=["u"])
 
 
 def update_damage(dm, dmax_old, Dv_old, law, mu=0.0, dt=1.0):

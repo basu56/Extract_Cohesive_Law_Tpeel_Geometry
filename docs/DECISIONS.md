@@ -410,3 +410,33 @@ Decision (user, on Claude Web's plan):
 Order: S5.0 (parameters as inputs) → S5a → review → S5b → S5c → review.
 Instructions: `docs/solver/S5_INSTRUCTIONS.md`. S5 starts after the S4a review.
 Status: **agreed**.
+
+## 2026-11-15 — D29: S5.0/S5a review — forward-gate rule, FD limit, observation operator, S5b/S5c scope
+Decision (user):
+1. **S5.0/S5a accepted.**
+2. **Forward gate, revised rule.** The change from passing the law as runtime arguments is accepted;
+   there is no second code path. The rule is: the difference must start at roundoff level and grow
+   to ≤ 1e-10 P_peak within the comparison window (measured 3.8e-12 – 6.5e-12).
+3. **ln σ_c FD gate (1.02e-5):** accepted as a finite-difference limit. The error is flat between
+   h = 1e-6 and 1e-7, the other parameters pass, and PARDISO and SuperLU agree. The log states
+   whether kink-straddled increments were excluded.
+4. **Observation operator** (post-peak spikes).
+   - The observed load is P averaged over a fixed δ window equal to one bond-element passage: crack
+     advance h_coh = 0.1 mm, with the corresponding Δδ derived from the crack-tip record and
+     documented.
+   - The same linear operator is applied to data, model and sensitivities.
+   - It is used in every objective from now on: S5b, S5c and the later inversions.
+5. **Factorization reuse** (sensitivity overhead): deferred to S4b.
+6. **S5b.** The adjoint-vs-direct test (≤ 1e-10) and the adjoint-vs-FD test run on identical
+   converged states, with J defined on the pre-peak window and on the filtered full window.
+7. **S5c.** The Fisher matrix on `sw_s40` is computed three ways:
+   - (i) pre-peak window only;
+   - (ii) full window, filtered;
+   - (iii) full window, unfiltered (reference only).
+
+   Stability under a different schedule (e.g. the rtol 1e-10 run): the eigenvalues and the weak
+   direction of (i) and (ii) should change by ≤ ~1 %. The instability of (iii) is reported as the
+   motivation for the filter. The weak directions of (i) and (ii) are then compared with D18's
+   matched-pair direction, as instructed.
+8. Stop for review after S5c.
+Status: **agreed**.

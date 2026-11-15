@@ -36,7 +36,6 @@ import numpy as np
 import scipy.sparse as sps
 
 from .interface import AlphaLawParams, effective_separation
-from .laws_jax import law_params
 
 ALPHA_LOG = ("ln_K0", "ln_sigc", "ln_Gc", "alpha")
 
@@ -46,6 +45,30 @@ def alpha_log_basis(law):
     z = np.zeros(4)
     return AlphaLawParams(K0=jnp.asarray(z + np.eye(4)[0] * law.K0), sigc=jnp.asarray(z + np.eye(4)[1] * law.sigc),
                           Gc=jnp.asarray(z + np.eye(4)[2] * law.Gc), alpha=jnp.asarray(z + np.eye(4)[3]))
+
+
+def identity_basis(law):
+    """Tangent pytree with one direction per scalar of every leaf (p = total size), e.g. all knot
+    tractions of a PiecewiseLawParams.  Returns (basis, names)."""
+    leaves, tdef = jax.tree_util.tree_flatten(law)
+    sizes = [int(np.size(x)) for x in leaves]
+    p = sum(sizes)
+    out, names, off = [], [], 0
+    import dataclasses
+    fields = [f.name for f in dataclasses.fields(law) if f.name != "u"]       # data fields, in leaf order
+    for x, n, f in zip(leaves, sizes, fields):
+        e = np.zeros((p,) + np.shape(x))
+        e.reshape(p, -1)[off: off + n, :] = np.eye(n)
+        out.append(jnp.asarray(e))
+        names += [f] if n == 1 and np.ndim(x) == 0 else [f"{f}[{i}]" for i in range(n)]
+        off += n
+    return jax.tree_util.tree_unflatten(tdef, out), names
+
+
+def subset_basis(basis, idx):
+    """Rows idx of a basis pytree."""
+    idx = np.asarray(idx)
+    return jax.tree_util.tree_map(lambda x: x[idx], basis)
 
 
 def perturb_alpha_log(law, name, h):
@@ -169,7 +192,7 @@ class DirectSensitivity:
             return jax.vmap(one)(Sq, Sd, Sv, E)
 
         def kinks(q, dmax_old, dmax_new, law):
-            d0, df = law_params(law.K0, law.sigc, law.Gc, law.alpha)
+            d0, df = law.d0, law.df
             m = dm(q)
             dstar = jnp.maximum(dmax_old, d0)
             n_sw = jnp.sum(jnp.abs(m - dstar) <= self.switch_tol * dstar)
