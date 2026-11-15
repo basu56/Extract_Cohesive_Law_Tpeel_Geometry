@@ -104,7 +104,8 @@ for yi, (tg, lab) in zip(y, steps):
     ax[0].text(wall + 8, yi, "%.0f s" % wall, va="center", fontsize=8, color="0.2")
 abq = float(lad["abaqus"]["wall"])
 ax[0].axvline(abq, color="0.4", ls=":", lw=1)
-ax[0].text(abq + 5, y[-1] - 0.55, "ABAQUS %.0f s" % abq, fontsize=8, color="0.3")
+ax[0].text(abq + 8, y[0] + 0.45, "ABAQUS %.0f s" % abq, fontsize=8, color="0.3")
+ax[0].set_ylim(y[-1] - 0.6, y[0] + 0.8)
 ax[0].set_yticks(y)
 ax[0].set_yticklabels([lab for _, lab in steps], fontsize=8)
 ax[0].set(xlabel="wall time (s), coarse T-peel, 1 thread", title="(a) S3c items, cumulative")
@@ -116,7 +117,8 @@ err = [float(tol[f"tol_{r}_rep"]["max_dP_ref_same_t_win"]) for r in rt]
 its = [int(float(tol[f"tol_{r}_rep"]["newton_total"])) for r in rt]
 ax[1].loglog([float(r) for r in rt], err, marker="o", ms=5, lw=1.5, color=C[0], mfc="w")
 for r, e_, n in zip(rt, err, its):
-    ax[1].annotate("%d it." % n, (float(r), e_), textcoords="offset points", xytext=(4, -11), fontsize=7, color="0.3")
+    ax[1].annotate("%d it." % n, (float(r), e_), textcoords="offset points", xytext=(-8, 7), fontsize=7, color="0.3",
+                   ha="right")
 ax[1].axhline(1e-5, color="0.4", ls=":", lw=1)
 ax[1].text(1.2e-9, 1.3e-5, "criterion 1e-5", fontsize=8, color="0.3")
 ax[1].set(xlabel="rtol (Newton, relative to the reaction)",
@@ -127,7 +129,7 @@ ax[1].set(xlabel="rtol (Newton, relative to the reaction)",
 ax[2].plot(g_fin[w_fin], 1e2 * e_fin[w_fin], color=C[0], lw=1.0)
 ax[2].axhline(0, color="0.6", lw=0.8)
 ax[2].set(xlabel=r"$\Delta$ (mm)", ylabel=r"$(P - P_{ABAQUS}) / P_{peak}$ (%)",
-          title=r"(c) production sw_s40, final S3c configuration")
+          title="(c) production sw_s40, final S3c path")
 ax[2].text(0.98, 0.04, "peak %+.1e, max %.1e, rms %.1e\n%d s vs ABAQUS %d s (1 thread)" %
            (r_fin["err_P_peak"], r_fin["max_dP_win"], r_fin["rms_dP_win"], r_fin["wall"], prod[0]["wall"]),
            transform=ax[2].transAxes, ha="right", fontsize=8, color="0.2")
