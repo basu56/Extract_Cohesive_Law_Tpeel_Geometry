@@ -108,7 +108,7 @@ target, δ = 1.6 mm; the same builder as production; 7,306 unknowns):
 | ABAQUS, same deck | 1479 | 232 | 2910 | – | 256 s | 562.397 N | – |
 | tslid.fe monolithic, COH2D4 kinematics | 1778 | 321 | 2551 (8) | 602 | 670 s | −2.2e-5 | 2.9e-4 |
 | tslid.fe monolithic, "global" frame | 1766 | 315 | 2550 (15) | 590 | 515 s | −1.2e-4 | 4.1e-4 |
-| tslid.fe staggered, "global" frame | TBD (job 45868159 still running when this was written) | | | | | | |
+| tslid.fe staggered, "global" frame | did not finish: 4 h SLURM limit (job 45868159), no records written | | | | > 14,400 s | – | – |
 
 - The full step completes with ABAQUS-like incrementation. Both codes cut back only during crack
   propagation (t > 37 s), where the 0.5 mm cohesive elements fail one at a time. The peak and Δ at
