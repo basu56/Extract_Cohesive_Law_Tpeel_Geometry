@@ -10,7 +10,7 @@ REPO=${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}
 DIR=${1:?rundir}; TAG=${2:?tag}; shift 2
 SRC=/scratch/negishi/basu56/tslid_runs/solver_S3b_coarse
 mkdir -p "$DIR" && cd "$DIR" || exit 1
-for f in c_s40.inp c_s40.json c_s40_response.csv c_s40.msg c_s40.sta; do [ -e $f ] || ln -s $SRC/$f .; done
+for f in c_s40.inp c_s40.json c_s40_response.csv c_s40_profiles.npz c_s40.msg c_s40.sta; do [ -e $f ] || ln -s $SRC/$f .; done
 echo "$(date) repo $(git -C "$REPO" rev-parse --short HEAD) host $(hostname) cpu $(lscpu | sed -n 's/^Model name: *//p')"
 cd "$REPO"
 source scripts/fe/pin_threads.sh "${THREADS:-0}"      # THREADS=<n>: pin to n allocated CPUs
