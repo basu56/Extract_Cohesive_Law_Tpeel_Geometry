@@ -120,7 +120,7 @@ if a is not None:
                     lw=1.0, label=lab)
     ax[-1].axhline(0, color="0.6", lw=0.8)
     ax[-1].set(xlabel=r"$\Delta$ (mm)", ylabel=r"$(P - P_{default}) / P_{peak}$ (%)", title="sw_s40 toggles vs default")
-    ax[-1].legend(frameon=False, fontsize=8)
+    ax[-1].legend(frameon=False, fontsize=8, loc="lower right")
 fig.tight_layout()
 for ext in ("png", "pdf"):
     fig.savefig(os.path.join(OUT, f"s3de.{ext}"), dpi=200)
