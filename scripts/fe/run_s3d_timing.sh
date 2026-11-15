@@ -2,7 +2,7 @@
 # run_s3d_timing.sh -- D25 timing protocol: one job, one node (exclusive), sequential and pinned:
 #   1. ABAQUS, default deck (cpus=1)        2. ABAQUS, field output thinned to tslid.fe's (cpus=1)
 #   3. tslid.fe, 1 thread                    4. tslid.fe, 4 threads
-#   (Negishi repo root) sbatch --account=tomar --partition=cpu --exclusive --mem=0 --time=06:00:00 \
+#   (Negishi repo root) sbatch --account=tomar --partition=cpu --exclusive --time=06:00:00 \
 #       --job-name=s3d_timing --output=<rundir>/slurm-timing-%j.out scripts/fe/run_s3d_timing.sh <rundir> <deck.inp>
 # Wall times: /usr/bin/time for every run, plus WALLCLOCK from the ABAQUS .msg.
 set -u
