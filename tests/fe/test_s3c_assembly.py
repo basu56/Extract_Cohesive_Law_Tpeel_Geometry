@@ -138,7 +138,7 @@ def test_abaqus_like_outputs_and_schedule_replay(weak_deck, tmp_path):
     last = {k: float(v) for k, v in rows[-1].items()}
     assert last["ALLDMD"] > 0.01 * last["W_ext"]
     bal = abs(last["W_ext"] - last["ALLSE"] - last["ALLDMD"] - last["ALLCD"]) / last["W_ext"]
-    assert bal <= 1e-2, bal          # E4 tolerance; 2.5e-3 here: trapezoid on Y dD over large damage steps
+    assert bal <= 1e-3, bal          # exact inviscid ALLDMD; the rest is trapezoid (W_ext, viscous part)
     z = np.load(tmp_path / "w_profiles.npz")
     assert z["opening"].shape == (len(rows), len(z["x_face"]))
     assert json.load(open(tmp_path / "w.json"))["solver"] == "tslid.fe"

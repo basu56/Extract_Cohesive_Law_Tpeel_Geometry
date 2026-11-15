@@ -14,12 +14,16 @@ the same column names, so that src/tslid/analysis/energy_checks.py runs on them 
 Energies per converged increment n -> n+1 (W = width; per quadrature point, weights w L/2):
     W_ext   trapezoid of P d(delta), as extract_tpeel_odb.py
     ALLSE   bulk strain energy + W sum [(1 - Dv) K0/2 dm^2 + K0/2 <-dn>^2]   (stored, current Dv)
-    ALLDMD  sum of W sum 1/2 (Y_n + Y_n+1) (D_n+1 - D_n),   Y = K0/2 dm^2   (inviscid damage)
-    ALLCD   sum of W sum 1/2 (Y_n + Y_n+1) (Dv_n+1 - Dv_n)  - ALLDMD         (viscous regularisation)
+    ALLDMD  W sum G_d(dmax), the energy the inviscid law dissipates up to dmax, in closed form:
+            damage grows only while dm = dmax, where Y = K0/2 dm^2, so
+            G_d(d) = int_0^d Y dD = K0 d0^2/2 + F(d) - (1 - D(d)) K0 d^2/2  (d > d0; 0 below),
+            F the envelope integral of the law (exact, independent of the increment size)
+    ALLCD   sum of W sum 1/2 (Y_n + Y_n+1) ((Dv - D)_n+1 - (Dv - D)_n),   Y = K0/2 dm^2
+            (viscous regularisation: the lag Dv - D; trapezoid in time)
     ALLPD = ALLVD = 0; ALLWK = W_ext.
-[I] This split of the dissipation is ours (energy released at the damage variable that drives the
-stiffness, Dv, minus the inviscid part); ABAQUS's internal split is not documented to us.  The sum
-ALLDMD + ALLCD is the total cohesive dissipation either way.
+[I] This split of the dissipation is ours (the inviscid law's dissipation at the current dmax, and
+the rest of the energy released through Dv); ABAQUS's internal split is not documented to us.
+The sum ALLDMD + ALLCD is the total cohesive dissipation either way.
 Opening: U2(IFACE_U) - U2(IFACE_L), node pairs matched by x (as the extractor).  traction_tip: normal
 cohesive traction per element (mean of its two points); sdeg_tip: max D per element.
 """
@@ -53,9 +57,19 @@ class TPeelWriter:
         self.wq = np.asarray(coh.w)[None, :] * (0.5 * coh.L)[:, None] * coh.width        # (n_seg, n_q)
         self.x_tip = 0.5 * (m.coords[coh.bot[:-1], 0] + m.coords[coh.bot[1:], 0])
         self.rows, self.open, self.trac, self.sdeg, self.times = [], [], [], [], []
-        self.acc = dict(W_ext=0.0, ALLDMD=0.0, Dv=0.0)
+        self.acc = dict(W_ext=0.0, ALLCD=0.0)
         self.prev = None
         self.fh = None
+
+    def _allmd(self, dmax):
+        law = self.m.law
+        if law is None:
+            return 0.0
+        K0, d0 = self.m.K0, law.d0
+        d = np.maximum(dmax, d0)
+        Gd = 0.5 * K0 * d0 ** 2 + np.asarray(law.envelope_integral(d)) \
+            - (1.0 - np.asarray(law.damage(d))) * 0.5 * K0 * d ** 2
+        return float(np.sum(self.wq * np.where(dmax > d0, Gd, 0.0)))
 
     def _Y(self, q):
         dn, ds = self.S.separations(q)
@@ -71,15 +85,13 @@ class TPeelWriter:
         if self.prev is not None:
             Pp, dp, Yp, Dp, Dvp = self.prev
             self.acc["W_ext"] += 0.5 * (P + Pp) * (delta - dp)
-            Ym = 0.5 * (Y + Yp)
-            self.acc["ALLDMD"] += float(np.sum(self.wq * Ym * (D - Dp)))
-            self.acc["Dv"] += float(np.sum(self.wq * Ym * (Dv - Dvp)))
+            self.acc["ALLCD"] += float(np.sum(self.wq * 0.5 * (Y + Yp) * ((Dv - D) - (Dvp - Dp))))
         self.prev = (P, delta, Y, D, Dv)
         U = self.m.lift(q)
         op = U[self.iu] - U[self.il]
         row = dict(time=t, delta=delta, P=P, delta_mouth=float(op[0]) if self.x_face[0] < 1e-6 else np.nan,
                    W_ext=self.acc["W_ext"], ALLSE=self.S.bulk_energy(q) + se_coh, ALLPD=0.0,
-                   ALLDMD=self.acc["ALLDMD"], ALLVD=0.0, ALLCD=self.acc["Dv"] - self.acc["ALLDMD"],
+                   ALLDMD=self._allmd(np.asarray(hist["dmax"])), ALLVD=0.0, ALLCD=self.acc["ALLCD"],
                    ALLWK=self.acc["W_ext"])
         tn, _ = traction(dn, ds, Dv, K0)
         self.open.append(op)
