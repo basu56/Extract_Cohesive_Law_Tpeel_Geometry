@@ -167,3 +167,7 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
   - S4b (batching, GPU, increments) after S5.
 - Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested; ABAQUS manual citations
   unverified (user checking 3DS access).
+
+## Update — Claude Web, 2026-11-15 (S5 plan)
+- S5 instructions are in `docs/solver/S5_INSTRUCTIONS.md` (decision "S5 design").
+- **Start S5 only after the S4a review.** Order: S5.0 → S5a → stop → S5b → S5c → stop.

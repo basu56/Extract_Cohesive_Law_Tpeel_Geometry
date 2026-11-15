@@ -391,3 +391,22 @@ Decision (user):
    - Before the step study, show that two identical runs agree bit for bit (or to ≤ 1e-14).
    - In the step study, report where noise starts to dominate.
 Status: **agreed**.
+
+## 2026-11-15 — D28: S5 design — direct sensitivities and discrete adjoint
+Decision (user, on Claude Web's plan):
+- Differentiate the **discrete** T-peel response (realized schedule, converged states,
+  monolithic incremental potential) with respect to the law parameters, by **two independent
+  methods**:
+  - **(a) direct (forward) sensitivities.** p extra right-hand sides per increment on the reused
+    factorization. Gives the full Jacobian dy/dθ for the α family.
+  - **(b) discrete adjoint.** Backward sweep with history costates; cost independent of p;
+    needed for tabular and neural laws.
+- (a) is verified against finite differences with schedule replay; (b) against (a) to roundoff.
+- Per-increment partials come from JAX jvp/vjp. Newton and the driver are never autodiffed.
+- Loading–unloading kinks: derivative of the active branch, with near-switch points counted and
+  reported.
+- First result (S5c): Fisher matrix on `sw_s40`, its weak direction compared with D18's
+  matched-pair direction.
+Order: S5.0 (parameters as inputs) → S5a → review → S5b → S5c → review.
+Instructions: `docs/solver/S5_INSTRUCTIONS.md`. S5 starts after the S4a review.
+Status: **agreed**.
