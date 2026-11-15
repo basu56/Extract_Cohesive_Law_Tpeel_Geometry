@@ -156,3 +156,71 @@ cross-checks.
   (S3c will tune it), or a roundoff-level correction.
 - **Logging.** Every increment records its iterations, staggered passes, cutbacks before it,
   line-search halvings, and wall / tangent / solve / history time.
+
+## 6. Fast path (S3c): element-local assembly, condensation, energy Newton, solvers
+
+Code: `assembly.py` (`ElementSystem`), `incremental.py` (`newton_energy`), `linsolve.py`,
+`tpeel_output.py`. Tests: `tests/fe/test_s3c_assembly.py`. Measurements: SOLVER_LOG S3c.
+
+**Element-local derivatives.** E(q) = Σ_e E_e(v_e), where v_e gathers the element's unknowns from
+q. The residual and tangent are Σ P_eᵀ ∇E_e and Σ P_eᵀ ∇²E_e P_e, built from batched (`vmap`)
+element gradients and Hessians and scattered into a fixed CSR pattern of the free dofs. This
+replaces the 34-colour `sparse.jacfwd` on U plus the SciPy JᵀKJ + G reduction.
+- Elements touching coupling slaves carry the coupling inside the element. Their local vector is
+  [8 node dofs, (4 IM), u_RP, θ], and a slave node moves as u_RP + (R(θ) − I)ΔX (or the linear
+  form).
+- So their Hessian already contains JᵀKJ and the θθ term G. There is no global reduction step.
+- [D] The free-free matrix equals the jacfwd one to 1.3e-14 (coarse) and 6.3e-14 (production).
+  Energies, residuals and histories agree to roundoff (finite and linear coupling, monolithic
+  and staggered history, SVK and Hencky).
+
+**Static condensation of the incompatible modes.** The 4 IM amplitudes of a Q4IM element appear
+only in that element. Per element, with k = node and RP dofs and i = IM:
+
+    S_e = K_kk − K_ki K_ii⁻¹ K_ik,   r_c = r_k − K_ki K_ii⁻¹ r_i   (assembled),
+    solve S Δu = r_c,   then   Δa_e = K_ii⁻¹ (r_i − K_ik Δu_e).
+
+- K_ii⁻¹ is a closed-form batched 4 × 4 inverse (`inv4`). XLA's batched LAPACK solve is slow
+  for many tiny systems on CPU.
+- This is exactly the Newton step of the full system. [D] Its backward error on the full system
+  is 5e-16, the same as a direct full solve.
+- Forward agreement is limited by cond(K) ≈ 3e8: two SuperLU solves of the same full system
+  already differ by up to 8.6e-11. The instructed "same step to 1e-12" is therefore tested as a
+  backward error (≤ 1e-14), plus a forward difference ≤ 1e-9.
+- The system shrinks from 158,954 to 54,770 unknowns at production size (7282 → 2802 coarse).
+
+**Energy Newton (`newton_energy`).** One fused jitted call returns (E, r_q) at a trial point. The
+full step is tried first, and the accepted trial's (E, r) are reused. A trial q − s·dq is
+accepted on either of two criteria:
+- Armijo on the incremental potential, E(q − s·dq) ≤ E(q) − c·s·(r·dq), when dq is a descent
+  direction (r·dq > 0);
+- ‖r_f‖₂ decrease. The Newton direction always decreases ‖r‖², also with the indefinite
+  softening tangent and when energy differences are at roundoff.
+
+Optional divergence check (`diverge_after = I₀`): abandon the attempt, and cut back, once
+‖r_f‖∞ has increased in two consecutive iterations after iteration I₀. This is our rule; we do not
+claim it is ABAQUS's (its time-incrementation controls are not reproduced). It changes only how
+fast a failing attempt is abandoned. The converged increments still meet the same tolerance.
+
+**Linear solvers (`linsolve.py`).** SuperLU (SciPy, COLAMD); SuperLU with MMD on AᵀA; and MKL
+PARDISO via `pypardiso`.
+- PARDISO comes in two forms: nonsymmetric (mtype 11), and symmetric indefinite on the upper
+  triangle (mtype −2, Bunch–Kaufman; valid because the matrix is a Hessian).
+- The symbolic analysis (phase 11) runs once per sparsity pattern. Each Newton iteration then
+  does only the numerical factorization and solve (phase 23).
+- UMFPACK and CHOLMOD were not benchmarked: they need SuiteSparse, which Negishi does not
+  provide.
+
+**ABAQUS-compatible outputs (`tpeel_output.py`).** `<name>_response.csv`, `_profiles.npz`, `.json`
+and `.sta` carry the column names of `extract_tpeel_odb.py`, so `energy_checks.py` and
+`compare_ld.py` run on them unchanged. Energies per increment:
+- W_ext: trapezoid of P dδ.
+- ALLSE: bulk energy plus interface stored energy at the current D_v.
+- ALLDMD = Σ ½(Y_n + Y_n+1)(D_n+1 − D_n), with Y = K0 δ_m²/2.
+- ALLCD = Σ ½(Y_n + Y_n+1)(D_v,n+1 − D_v,n) − ALLDMD.
+
+[I] The ALLDMD / ALLCD split is ours; their sum is the total cohesive dissipation.
+
+**Timing hygiene.** Negishi allocates CPUs by memory (16 GB → 9) and sets no cpuset.
+`scripts/fe/pin_threads.sh` pins a run with `taskset` to N of the CPUs SLURM allocated to it, and
+sets the MKL/OMP thread counts. Timed comparisons with ABAQUS (`cpus=1`) use N = 1.

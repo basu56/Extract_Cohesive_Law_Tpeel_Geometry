@@ -125,4 +125,7 @@ target, δ = 1.6 mm; the same builder as production; 7,306 unknowns):
   about 410 s is residual evaluations in the line search, the lift and J products, and Python
   overhead per increment.
 - S3c will profile and optimise this as instructed.
+- *Correction 2026-11-15 (S3c profile, `docs/SOLVER_LOG.md`):* the ~410 s are mostly the 321
+  abandoned attempts before cutbacks (~456 s of 753 s in the profiled rerun), not line-search
+  residuals or Python overhead. The timings above counted converged increments only.
 - First call (JIT) 2.0 s.

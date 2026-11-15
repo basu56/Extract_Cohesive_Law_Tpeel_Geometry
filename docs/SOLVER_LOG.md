@@ -372,3 +372,14 @@ increment counts. The only staggered numbers are the partial Bell run in
 the monolithic run. Conclusion: on the T-peel, staggered history is at least 28× slower than
 monolithic. It is kept only for cross-checks. S3c will make the driver write records
 incrementally, so a run that times out still leaves data.
+
+*Note 2026-11-15 (S3c profile; corrects the S3b runtime paragraph).* [D] The S3b cost split
+attributed the unaccounted ~410 s of the 670 s coarse run to "line-search residuals, J products
+and Python overhead". The S3c full-run profile (Negishi job 45898677, same code and deck, 753 s
+with cProfile) shows instead that **only 297 s are spent in converged increments; ~456 s (61 %) are
+the 321 abandoned attempts before cutbacks**. Each attempt ran the full 16 iterations, often with
+8 line-search halvings each: 9979 tangents in total, of which ~5650 belong to abandoned attempts.
+The per-phase totals over the whole run were: jacfwd 278 s, SuperLU 123 s, gradient 84 s, numpy
+lift/J and J^T K J reduction 179 s, eager history update 47 s. The S3b increment log had counted
+converged increments only. The S3b "Cost / limitations" paragraph should be read with this
+correction.
