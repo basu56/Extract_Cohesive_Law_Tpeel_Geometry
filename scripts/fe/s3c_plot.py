@@ -117,8 +117,9 @@ err = [float(tol[f"tol_{r}_rep"]["max_dP_ref_same_t_win"]) for r in rt]
 its = [int(float(tol[f"tol_{r}_rep"]["newton_total"])) for r in rt]
 ax[1].loglog([float(r) for r in rt], err, marker="o", ms=5, lw=1.5, color=C[0], mfc="w")
 for r, e_, n in zip(rt, err, its):
-    ax[1].annotate("%d it." % n, (float(r), e_), textcoords="offset points", xytext=(-8, 7), fontsize=7, color="0.3",
-                   ha="right")
+    first = r == rt[0]
+    ax[1].annotate("%d it." % n, (float(r), e_), textcoords="offset points", xytext=(8, -3) if first else (-8, 7),
+                   fontsize=7, color="0.3", ha="left" if first else "right")
 ax[1].axhline(1e-5, color="0.4", ls=":", lw=1)
 ax[1].text(1.2e-9, 1.3e-5, "criterion 1e-5", fontsize=8, color="0.3")
 ax[1].set(xlabel="rtol (Newton, relative to the reaction)",
