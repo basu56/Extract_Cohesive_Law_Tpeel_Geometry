@@ -29,7 +29,7 @@ from tslid.analysis.compare_ld import load as cld_load  # noqa: E402
 
 RUN = sys.argv[1]
 OUT = sys.argv[2] if len(sys.argv) > 2 else "results/solver/S3_tpeel"
-REF = "elc2"
+REF = os.environ.get("S3C_REF", "elc2")       # reference tslid.fe run (tag) for *_ref columns
 
 
 def rd(p):
