@@ -1,8 +1,9 @@
 #!/bin/bash -l
-# run_s3d_timing.sh -- D25 timing protocol: one job, one node (exclusive), sequential and pinned:
+# run_s3d_timing.sh -- D25 timing protocol: one job, one node, sequential and pinned (an exclusive node,
+# 128 cores, exceeds the tomar group cap of 64 hp_cpu and never starts; Negishi nodes have no SMT):
 #   1. ABAQUS, default deck (cpus=1)        2. ABAQUS, field output thinned to tslid.fe's (cpus=1)
 #   3. tslid.fe, 1 thread                    4. tslid.fe, 4 threads
-#   (Negishi repo root) sbatch --account=tomar --partition=cpu --exclusive --time=06:00:00 \
+#   (Negishi repo root) sbatch --account=tomar --partition=cpu --ntasks=1 --cpus-per-task=16 --mem=32G --time=06:00:00 \
 #       --job-name=s3d_timing --output=<rundir>/slurm-timing-%j.out scripts/fe/run_s3d_timing.sh <rundir> <deck.inp>
 # Wall times: /usr/bin/time for every run, plus WALLCLOCK from the ABAQUS .msg.
 set -u

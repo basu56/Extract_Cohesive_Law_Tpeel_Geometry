@@ -540,3 +540,10 @@ unchanged) [D].**
 - S3d: `compare_solvers.py`, the formal `sw_s40` gates, the SVK/Hencky toggle, the location of
   the S3a traction difference along the bond (D23 item), and then the other four reference
   cases.
+
+*Note 2026-11-15 (S3d; corrects the S3c entry, item 3).* The S3c entry attributes the
+node-to-node timing variation to "hyperthread siblings shared between jobs". That is wrong:
+Negishi `cpu` nodes have no SMT (`scontrol show node`: ThreadsPerCore = 1, 2 × 64 cores). [H] The
+variation is more likely from other jobs sharing the L3 cache and memory bandwidth of the node,
+and from clock-frequency differences. The conclusion stands: ratios measured within one job are
+reliable, absolute numbers across jobs are indicative.
