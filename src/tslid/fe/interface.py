@@ -105,11 +105,11 @@ class CohesiveInterface:
         coords: (n_nodes, 2) reference coordinates (mm).
         bot, top: (n + 1,) node indices of the lower / upper face, paired and ordered along the bond.
         width: out-of-plane thickness W (mm); energies are totals (N*mm).
-        quadrature: "gauss" (2-point) or "nodal" (2-point Newton-Cotes), see INTERFACE.md.
+        quadrature: "nodal" (2-point Newton-Cotes, what COH2D4 uses: S2 probe [D]) or "gauss".
         frame: "global" (reference segment frame) or "midsurface" (deformed mid-surface frame).
     """
 
-    def __init__(self, coords, bot, top, width=1.0, quadrature="gauss", frame="global"):
+    def __init__(self, coords, bot, top, width=1.0, quadrature="nodal", frame="global"):
         self.coords = np.asarray(coords, dtype=float)
         self.bot, self.top = np.asarray(bot), np.asarray(top)
         self.width, self.frame = float(width), frame

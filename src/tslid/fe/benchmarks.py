@@ -77,3 +77,141 @@ def cantilever(ny, kind="Q4IM", kinematics="linear", load="force", P=230.0, v=0.
     out.update(U=U[: 2 * m.n_nodes].reshape(-1, 2), model=m, sets=s, n_dof=m.n_dof,
                n_colors=solver.n_colors, t_total=time.perf_counter() - t0)
     return out
+
+
+# --------------------------------------------------------------------------------------------
+# S2: single cohesive element (one COH2D4-like segment, 1 mm long, width 1) under a prescribed
+# top-face displacement path.
+# --------------------------------------------------------------------------------------------
+def single_cohesive(law, un_path, us_path, times, mu=0.0, quadrature="nodal"):
+    """Response of one cohesive segment whose top nodes follow (us_path, un_path) uniformly.
+
+    Args:
+        law: AlphaLawParams or TabularLawParams.
+        un_path, us_path: (n+1,) prescribed normal / shear top displacement (mm), starting at 0.
+        times: (n+1,) times (s); used only for viscous regularisation (mu > 0).
+    Returns dict of (n+1,) arrays: tn, ts (tractions, MPa), D, Dv, dmax, F1, F2 (top nodal force
+    sums, N), W (external work, N*mm, trapezoid), psi (stored energy), diss = W - psi.
+    """
+    import jax
+    import jax.numpy as jnp
+    from .interface import CohesiveInterface
+
+    coords = np.array([[0.0, 0.0], [1.0, 0.0], [1.0, 0.0], [0.0, 0.0]])
+    itf = CohesiveInterface(coords, [0, 1], [3, 2], 1.0, quadrature)
+    K0 = law.K0
+    top = jnp.array([2, 3])
+
+    def u_of(un, us):
+        return jnp.zeros((4, 2)).at[top, 0].set(us).at[top, 1].set(un)
+
+    def step(carry, inp):
+        hist, W, F_old, u_old = carry
+        un, us, dt = inp
+        u = u_of(un, us)
+        hist = itf.update_history(u, hist, law, mu, dt)
+        F = jax.grad(itf.energy)(u, hist["Dv"], K0)[top].sum(axis=0)
+        W = W + 0.5 * jnp.sum((F + F_old) * (u[2] - u_old[2]))
+        tn, ts = itf.tractions(u, hist, K0)
+        psi = itf.energy(u, hist["Dv"], K0)
+        out = dict(tn=tn[0, 0], ts=ts[0, 0], D=hist["D"][0, 0], Dv=hist["Dv"][0, 0],
+                   dmax=hist["dmax"][0, 0], F1=F[0], F2=F[1], W=W, psi=psi)
+        return (hist, W, F, u), out
+
+    un_path, us_path, times = (jnp.asarray(np.asarray(a, dtype=float)) for a in (un_path, us_path, times))
+    dts = jnp.diff(times)
+    init = (itf.zero_history(), 0.0, jnp.zeros(2), u_of(un_path[0], us_path[0]))
+    _, out = jax.lax.scan(step, init, (un_path[1:], us_path[1:], dts))
+    out = {k: np.r_[0.0, np.asarray(v)] for k, v in out.items()}
+    out["diss"] = out["W"] - out["psi"]
+    return out
+
+
+def two_block_bar(law, deltas, kind="Q4IM", gap=0.4, W=15.0, max_stagger=50):
+    """S2 test 6: two 1 x 1 mm Q4/Q4IM blocks joined by one cohesive segment (gap ``gap``),
+    bottom face fixed in y, top face pulled to y-displacement Delta (each value of ``deltas``),
+    with one node fixed in x per block (lateral contraction free).  Staggered history:
+    solve with damage frozen, update history, repeat until it no longer changes.
+
+    Returns dict of arrays per Delta: R (top reaction, N), delta_n (interface opening),
+    t_n (interface traction), D, n_stagger.
+    """
+    import jax.numpy as jnp
+    from .elements import BulkModel
+    from .interface import CohesiveInterface
+
+    y0 = [0.0, 1.0, 1.0 + gap, 2.0 + gap]
+    coords = np.array([[0.0, y0[0]], [1.0, y0[0]], [1.0, y0[1]], [0.0, y0[1]],
+                       [0.0, y0[2]], [1.0, y0[2]], [1.0, y0[3]], [0.0, y0[3]]])
+    elems = np.array([[0, 1, 2, 3], [4, 5, 6, 7]])
+    bulk = BulkModel(coords, elems, AL["E"], AL["nu"], W, kind, "linear")
+    itf = CohesiveInterface(coords, [3, 2], [4, 5], W)
+    nn = len(coords)
+
+    def energy(U, Dv):
+        return bulk.energy(U) + itf.energy(U[: 2 * nn].reshape(-1, 2), Dv, law.K0)
+
+    fixed = np.array([2 * 0, 2 * 0 + 1, 2 * 1 + 1, 2 * 7, 2 * 6 + 1, 2 * 7 + 1])
+    top_y = np.array([2 * 6 + 1, 2 * 7 + 1])
+    solver = SparseNewton(energy, bulk.n_dof, [bulk.elem_dofs, itf.elem_dofs], fixed)
+    U = np.zeros(bulk.n_dof)
+    hist = itf.zero_history()
+    out = {k: [] for k in ("R", "delta_n", "t_n", "D", "n_stagger")}
+    for Dl in deltas:
+        U[top_y] = Dl
+        for it in range(max_stagger):
+            res = solver.solve(U, None, hist["Dv"], rtol=1e-12, atol=1e-14)
+            assert res.converged, res.residual_history
+            U = res.U
+            new = itf.update_history(jnp.asarray(U[: 2 * nn].reshape(-1, 2)), hist, law)
+            change = float(jnp.max(jnp.abs(new["D"] - hist["D"])))
+            hist = new
+            if change < 1e-14:
+                break
+        r = solver.residual(U, np.zeros(bulk.n_dof), hist["Dv"])
+        dn, _ = itf.separations(jnp.asarray(U[: 2 * nn].reshape(-1, 2)))
+        tn, _ = itf.tractions(jnp.asarray(U[: 2 * nn].reshape(-1, 2)), hist, law.K0)
+        out["R"].append(r[top_y].sum())
+        out["delta_n"].append(float(dn.mean()))
+        out["t_n"].append(float(tn.mean()))
+        out["D"].append(float(hist["D"].mean()))
+        out["n_stagger"].append(it + 1)
+    out = {k: np.array(v) for k, v in out.items()}
+    out["area"] = 1.0 * W
+    return out
+
+
+def se_case(meta):
+    """Rebuild an ABAQUS single-COH2D4 run (Phase 0 src/tslid/single_element.py or S2
+    scripts/fe/build_se_deck.py) from its JSON metadata.
+
+    Returns (law, times, un, us, mu): the law object (AlphaLawParams or TabularLawParams, matching
+    the ABAQUS representation), increment times (s), prescribed top normal / shear displacement
+    (mm) at every increment (*Static, direct: t_k = k T / n_inc), and the viscosity (s).
+    """
+    from tslid.laws import AlphaLaw
+    from .interface import AlphaLawParams, TabularLawParams
+
+    p = meta["params"]
+    K = p.get("K", 8500.0)
+    lw = AlphaLaw(K, p["sigc"], p["Gc"], p["alpha"])
+    soft = meta["representation"]["softening"]
+    law = (TabularLawParams.from_alpha_law(lw, p.get("n_tab", 1000)) if soft == "tabular"
+           else AlphaLawParams(K, p["sigc"], p["Gc"], p["alpha"]))
+    n = meta.get("n_inc", p.get("n_inc"))
+    T = meta.get("step_time", 1.0)
+    t = np.arange(n + 1) / n
+    if "U_top" in meta:                                   # S2 decks: linear ramp of (U1, U2)
+        us_max, un_max = meta["U_top"]["3"]
+        amp = t
+        un, us = un_max * amp, us_max * amp
+    else:                                                 # Phase 0 decks: mode I, optional cycle
+        dmax = meta["dmax"]
+        if meta.get("d_unload") is not None:
+            du = meta["d_unload"]
+            t1, t2 = du / (2 * du + dmax), 2 * du / (2 * du + dmax)
+            amp = np.interp(t, [0.0, t1, t2, 1.0], [0.0, du / dmax, 0.0, 1.0])
+        else:
+            amp = t
+        un, us = dmax * amp, 0.0 * amp
+    return law, t * T, un, us, p.get("viscosity", 0.0)

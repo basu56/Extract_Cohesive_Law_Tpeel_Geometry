@@ -11,11 +11,12 @@ Units: mm, N, MPa.  K0 [MPa/mm], sigc [MPa], Gc [N/mm], separations [mm].
 
 Every parameter (K0, sigc, Gc, alpha) is a differentiable input.  Gradient safety
 (docs/solver/S0_S2_INSTRUCTIONS.md):
-- Near alpha = 0 (|alpha| < ALPHA_SERIES) s and g are evaluated as ratios of truncated power
-  series in which the 0/0 cancels analytically:
+- Near alpha = 0 (|alpha| < ALPHA_SERIES = 0.5) s and g are evaluated as ratios of truncated
+  power series in which the 0/0 cancels analytically (the closed forms lose up to ~eps/alpha^2 to
+  cancellation, e.g. 1.6e-12 at alpha = 1e-4 in tslid.laws.g_alpha):
       s = [sum_{k=1}^{m} y^k a^(k-1)/k!] / [sum_{k=1}^{m} a^(k-1)/k!],   y = 1 - x
       g = [sum_{k=2}^{m} a^(k-2)/k!]     / [sum_{k=1}^{m} a^(k-1)/k!]
-  (exact up to O(a^m / (m+1)!) ~ 1e-50 at m = 16, |a| < 1e-3), smooth in a through 0.
+  (truncation O(|a|^m / (m+1)!) < 1e-19 at m = 16, |a| < 0.5), smooth in a through 0.
 - Branches use the double-where pattern: the unused branch is evaluated at a safe argument,
   so its derivative is finite and is then discarded.
 """
@@ -23,7 +24,7 @@ import math
 
 import jax.numpy as jnp
 
-ALPHA_SERIES = 1e-3
+ALPHA_SERIES = 0.5
 _M = 16
 _FACT = [math.factorial(k) for k in range(_M + 2)]
 

@@ -1,6 +1,6 @@
 # Project status (handoff page)
 
-_Last updated: 2026-11-14 (night, S1) by Claude Code. Overwrite this page each session._
+_Last updated: 2026-11-14 (night, S2) by Claude Code. Overwrite this page each session._
 
 ## Where we are
 
@@ -87,5 +87,9 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
 - **S1 done** [D]: Q4IM ≡ CPE4I (1e-8 linear; NLGEOM v, M ≤ 4e-5 to 0.1 rad). Flag: u_tip 1.25 % (SVK) /
   0.30 % (Hencky) of its own value, constitutive and 2nd order; T-peel max rotation 0.0325 rad. D21 proposed
   (Q4IM + Hencky). `results/solver/S1_bulk/`.
-- User pre-approved continuing through the steps (2026-11-14). **Next: S2 (cohesive law and interface).**
+- **S2 done** [D]: JAX cohesive interface = ABAQUS COH2D4 to ≤ 6.8e-8 σ_c (20 inviscid runs: mode I/shear/mixed,
+  LIN/EXP/TAB, cyclic); viscous BE exact until D = 1 (post-failure tail ≤ 3.4e-5 σ_c, unexplained); COH2D4 uses
+  **nodal** quadrature; exact gradients in (K0, σ_c, G_c, α). `results/solver/S2_interface/`.
+- User pre-approved continuing (2026-11-14), but S0_S2_INSTRUCTIONS ends at S2. **Next: S3 instructions are
+  needed** (T-peel mesh, history scheme, frame) — draft with the user / Claude Web.
 - Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested.

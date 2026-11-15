@@ -23,11 +23,16 @@ from tatva.sparse import jacfwd as sparse_jacfwd
 
 
 def pattern_from_elem_dofs(elem_dofs, n_dof):
-    """CSR sparsity pattern (symmetric, sorted, with diagonal) from an (n_el, n_e) dof map."""
-    d = np.asarray(elem_dofs, dtype=np.int64)
-    n_e = d.shape[1]
-    rows = np.repeat(d, n_e, axis=1).ravel()
-    cols = np.tile(d, (1, n_e)).ravel()
+    """CSR sparsity pattern (symmetric, sorted, with diagonal) from an (n_el, n_e) dof map, or a
+    list of such maps with different widths (e.g. bulk elements and cohesive segments)."""
+    maps = elem_dofs if isinstance(elem_dofs, (list, tuple)) else [elem_dofs]
+    rows, cols = [], []
+    for d in maps:
+        d = np.asarray(d, dtype=np.int64)
+        n_e = d.shape[1]
+        rows.append(np.repeat(d, n_e, axis=1).ravel())
+        cols.append(np.tile(d, (1, n_e)).ravel())
+    rows, cols = np.concatenate(rows), np.concatenate(cols)
     A = sps.coo_matrix((np.ones(rows.size, dtype=np.int8), (rows, cols)), shape=(n_dof, n_dof)).tocsr()
     A.sum_duplicates()
     A.sort_indices()
@@ -50,7 +55,7 @@ class SparseNewton:
     Args:
         energy: scalar function energy(U, *params) (N*mm).
         n_dof: length of U.
-        elem_dofs: (n_el, n_e) global dof indices per element (sparsity pattern).
+        elem_dofs: (n_el, n_e) global dof indices per element, or a list of such maps.
         fixed: indices of prescribed dofs.
     """
 
@@ -74,20 +79,23 @@ class SparseNewton:
         """Full sparse tangent (SciPy CSR) at U."""
         return self._jac(jnp.asarray(U), *params).to_csr()
 
-    def solve(self, U0, f_ext=None, *params, rtol=1e-10, atol=1e-12, max_iter=25, verbose=False):
+    def solve(self, U0, f_ext=None, *params, rtol=1e-10, atol=1e-12, utol=1e-13, max_iter=25, verbose=False):
         """Newton iterations from U0 (fixed dofs of U0 hold the prescribed values).
 
         Converged when ||r_free||_inf <= max(atol, rtol * f_ref), with f_ref the largest of
-        ||f_ext||_inf and the reaction ||r_fixed||_inf (so displacement control also works).
+        ||f_ext||_inf, the reaction ||r_fixed||_inf and the initial free residual (so displacement
+        control works, and a fully debonded body with zero reaction does not chase roundoff),
+        or when the last Newton correction is at roundoff: ||dU||_inf <= utol * ||U||_inf.
         """
         t0 = time.perf_counter()
         U = np.array(U0, dtype=float)
         f_ext = np.zeros(self.n_dof) if f_ext is None else np.asarray(f_ext, dtype=float)
-        hist, ok = [], False
+        hist, ok, r0 = [], False, None
         for it in range(max_iter + 1):
             r = self.residual(U, f_ext, *params)
             rf = r[self.free]
-            f_ref = max(np.abs(f_ext).max(), np.abs(r[self.fixed]).max() if self.fixed.size else 0.0)
+            r0 = np.abs(rf).max() if r0 is None else r0
+            f_ref = max(np.abs(f_ext).max(), np.abs(r[self.fixed]).max() if self.fixed.size else 0.0, r0)
             hist.append(float(np.abs(rf).max()))
             if verbose:
                 print(f"  newton {it}: |r|_inf = {hist[-1]:.3e} (f_ref {f_ref:.3e})")
@@ -98,7 +106,12 @@ class SparseNewton:
                 break
             K = self.tangent(U, *params)
             Kff = K[self.free][:, self.free].tocsc()
-            U[self.free] -= spla.spsolve(Kff, rf)
+            dU = spla.spsolve(Kff, rf)
+            U[self.free] -= dU
+            if it > 0 and np.abs(dU).max() <= utol * max(np.abs(U).max(), 1e-300):
+                hist.append(float(np.abs(self.residual(U, f_ext, *params)[self.free]).max()))
+                ok = True
+                break
         return NewtonResult(U, it, hist, ok, time.perf_counter() - t0)
 
     def reactions(self, U, f_ext=None, *params):

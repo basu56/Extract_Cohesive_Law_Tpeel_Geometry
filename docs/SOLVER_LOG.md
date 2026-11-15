@@ -15,7 +15,7 @@ Update this table at each entry.
 |---|---|---|---|---|
 | S0 environment | **done** 2026-11-14 | 16/16 tests on Bell, Negishi node, GitHub CI; `test_laws` OK on Py 3.6 | suite 14–15 s (Bell login, Negishi node) | one locked JAX/tatva env on every machine, with CI |
 | S1 bulk element | **done**, 1 flagged item 2026-11-14 | Q4IM = CPE4I to 1e-8 (linear); NLGEOM v, M ≤ 4e-5; u_tip 1.25 % SVK / 0.30 % Hencky (own value) | ny=20 linear 1.8 s/solve; NL 2.6 s/incr (ABAQUS 50 s total) | locking-free bulk element matching CPE4I; constitutive gap quantified |
-| S2 cohesive interface | not started | | | |
+| S2 cohesive interface | **done** 2026-11-14 | 20 inviscid COH2D4 runs ≤ 6.8e-8 σ_c; viscous ≤ 4.8e-8 until D = 1; COH2D4 = nodal quadrature | 2000-increment element history ~0.5 s | ABAQUS cohesive behaviour reproduced exactly, with exact gradients in (K0, σ_c, G_c, α) |
 | S3 T-peel forward vs ABAQUS | not started | | | |
 | S4 throughput (batched / GPU) | not started | | | |
 | S5 gradients (adjoint) | not started | | | |
@@ -156,3 +156,59 @@ constitutive and second order in strain.
   energy. Proposed D21: Q4IM + Hencky, with SVK as a cross-check.
 - User: confirm the ABAQUS manual sections cited in `ELEMENTS.md`.
 - Laptop timing not done.
+
+## S2 — Cohesive law and interface — 2026-11-14 — code and log in the S2 commit
+
+**Built.**
+- `laws_jax.py`: the α family in JAX, every parameter differentiable. s and g are ratios of power
+  series for |α| < 0.5 (no 0/0, no cancellation), with double-`where` branches.
+- `interface.py`: `CohesiveInterface` (separations from matched node pairs, global or deformed
+  mid-surface frame, nodal or Gauss quadrature, energy with frozen damage, `update_history` with
+  backward-Euler viscous D_v), `AlphaLawParams`, `TabularLawParams` (ABAQUS TABULAR table).
+- `benchmarks.py`: `single_cohesive` (lax.scan over a prescribed path), `se_case` (rebuilds any
+  ABAQUS single-element run from its JSON), `two_block_bar`.
+- `solve.py`: multi-width dof maps; convergence scale now includes the initial residual, plus a
+  roundoff-level step criterion (needed once the interface is fully debonded).
+- ABAQUS side: `scripts/fe/build_se_deck.py` (new decks: shear, mixed, viscous, probe),
+  `extract_se_odb.py`, `run_s2_abaqus.sh`; `s2_compare.py`.
+- `docs/solver/INTERFACE.md`; tests `test_s2_law.py`, `test_s2_gradients.py`,
+  `test_s2_single_element.py`, `test_s2_assembly.py`.
+
+**Verification.** [D] Details in `results/solver/S2_interface/README.md`.
+1. Material point vs `tslid.laws`: ≤ 9.8e-16 σ_c (threshold 1e-12): **pass**.
+2. 14 Phase 0 runs: traction ≤ 6.8e-8 σ_c (thresholds 1e-6 / 2e-5): **pass**. Unloading ≤ 1.7e-8: **pass**.
+   Dissipation vs G_c: ≤ 7.8e-6 monotonic; **1.04e-5 for the cyclic run (threshold 1e-5: marginal)**.
+   It equals ABAQUS's own value (path-trapezoid error); the model's exact dissipation is G_c to 1e-12.
+3. Mixed mode (shear, δ_s = δ_n; LINEAR, EXPONENTIAL and TABULAR): ≤ 4.8e-8 σ_c: **pass**.
+4. Viscous: backward Euler = ABAQUS to ≤ 4.8e-8 σ_c until inviscid D = 1: **pass**. μ → 0 recovers
+   inviscid to 3.9e-11. **Partial:** after D = 1, ABAQUS completes D_v → 1 faster (rule unknown);
+   difference ≤ 3.4e-5 σ_c in the traction-free tail, negligible at production μ/Δt ≈ 8e-4.
+5. Gradients: AD vs FD ≤ 1e-6 inside branches; finite at δ = 0, δ_0, δ_f, α = 0 and compression;
+   dG/dG_c = 1 within 1e-8: **pass**.
+6. Assembly: R = t·A to 7.3e-13: **pass**.
+- Quadrature: COH2D4 is nodal (Newton–Cotes) [D, probe]; it is now the default.
+- Fast suite: 78 passed on Bell (2 slow deselected).
+
+**Runtime.** One 2000-increment single-element history: ≈ 0.5 s after JIT (lax.scan, Bell login
+CPU), against ≈ 60 s for the ABAQUS run (job 45857972: 10 runs in 9 min including extraction).
+The two-block bar needed up to 17 staggered passes per step in softening.
+
+**Gain.** The JAX interface reproduces ABAQUS COH2D4 at the material and element level to the
+precision of the ABAQUS output (≤ 7e-8 σ_c) for every representation, mode mix and unloading path
+we use, and it is exactly differentiable in (K0, σ_c, G_c, α). With S1, both ingredients of the
+T-peel model now agree with ABAQUS independently, so any S3 mismatch must come from the coupling
+(geometry, frame under NLGEOM, history scheme, loading) and not from the constitutive pieces.
+
+**Cost / limitations.**
+- Post-failure viscous tail differs from ABAQUS (above).
+- `frame="midsurface"` is implemented but untested (S3).
+- History is frozen per solve. The staggered scheme converges but may need many passes; S3
+  chooses staggered vs monolithic.
+- Manual citations in `INTERFACE.md` unverified.
+- Found in passing: `tslid.laws.g_alpha` loses up to 1.6e-12 near α = 1e-4. Harmless for our α
+  values; not changed (the ABAQUS-side code is frozen by the rules of this work).
+
+**Open items.**
+- S3 instructions (not yet written): T-peel mesh, loading, staggered vs monolithic history,
+  COH2D4 frame under NLGEOM, P–Δ vs ABAQUS σ_c = 40, α = 0.
+- D21 (bulk energy) and the S1 u_tip flag await the user.
