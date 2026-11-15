@@ -243,3 +243,11 @@ Status: **agreed**.
 Every solver step writes a fixed-format entry in `docs/SOLVER_LOG.md` (built, verification,
 runtime, gain, limitations, open items) and updates its summary table.
 Status: **agreed**.
+
+## 2026-11-14 — D21: Bulk element and energy for the T-peel adherends in tslid.fe
+Evidence: S1 (`results/solver/S1_bulk/README.md`). Q4IM reproduces ABAQUS CPE4I to ≤ 2e-8 (linear).
+Plain Q4 is 0.195 % too stiff at the production mesh. Under NLGEOM, Hencky is 4× closer to CPE4I
+than SVK in the axial tip displacement and the clamp moment, at 4× the cost.
+Proposal: use Q4IM with the Hencky energy in S3, and keep SVK as a cross-check. Judge NLGEOM agreement
+by v_tip, the reaction moment and |Δu|/|v|, not by u_tip relative to its own value.
+Status: **proposed** (needs the user's agreement; it also closes the S1 u_tip flag).

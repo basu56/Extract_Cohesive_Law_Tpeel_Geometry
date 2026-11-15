@@ -14,7 +14,7 @@ Update this table at each entry.
 | Step | Status | Key verification result | Runtime / throughput | Gain (one line) |
 |---|---|---|---|---|
 | S0 environment | **done** 2026-11-14 | 16/16 tests on Bell, Negishi node, GitHub CI; `test_laws` OK on Py 3.6 | suite 14–15 s (Bell login, Negishi node) | one locked JAX/tatva env on every machine, with CI |
-| S1 bulk element | not started | | | |
+| S1 bulk element | **done**, 1 flagged item 2026-11-14 | Q4IM = CPE4I to 1e-8 (linear); NLGEOM v, M ≤ 4e-5; u_tip 1.25 % SVK / 0.30 % Hencky (own value) | ny=20 linear 1.8 s/solve; NL 2.6 s/incr (ABAQUS 50 s total) | locking-free bulk element matching CPE4I; constitutive gap quantified |
 | S2 cohesive interface | not started | | | |
 | S3 T-peel forward vs ABAQUS | not started | | | |
 | S4 throughput (batched / GPU) | not started | | | |
@@ -96,3 +96,63 @@ float64, and every push is tested automatically. The ABAQUS-side code is unaffec
   account `tomar` may use it are TBD (needed for S4).
 - Laptop environment not yet verified.
 - S1 waits for the user's go-ahead.
+
+## S1 — Bulk element and kinematics — 2026-11-14 — code 87c1ce2, log in the following commit
+
+**Built.**
+- `kinematics.py`: plane-strain energies `linear`, `svk`, and `hencky` (log strain, power series
+  of ln C, NaN-free at H = 0; added to test the SVK-vs-hypoelastic hypothesis).
+- `elements.py`: `BulkModel` with Q4 (tatva Quad4, 2 × 2) and Q4IM (4 Wilson/Taylor incompatible
+  modes as extra global unknowns, enhanced displacement gradient with j₀/j scaling; Simo–Armero
+  F = F_c + H_enh under finite rotation).
+- `solve.py`: `SparseNewton`, a Python-loop Newton with the tangent from `tatva.sparse.jacfwd`
+  (pattern from the element dof map, distance-2 colouring: 18 colours for Q4, 34 for Q4IM) and a
+  SciPy SuperLU solve.
+- `meshing.py` (beam using the T-peel `graded()`, edge loads, 5-element patch); `benchmarks.py` (cantilever).
+- ABAQUS side: `scripts/fe/build_cantilever_inp.py`, `extract_cantilever_odb.py`, `run_s1_abaqus.sh`;
+  comparison `s1_compare.py`, `s1_plot.py`, `run_s1_compare.sh`.
+- `docs/solver/ELEMENTS.md`; tests `tests/fe/test_s1_patch.py` (6), `test_s1_cantilever.py` (6 + 2 slow).
+
+**Verification.** [D] Details in `results/solver/S1_bulk/README.md`.
+1. Patch test (distorted 5-element patch, Q4 and Q4IM × linear and SVK): energy error ≤ 2e-16,
+   nodal error ≤ 1e-18 mm, mode amplitudes 0. Threshold 1e-12: **pass**. SVK rigid rotation 0.3 rad
+   gives zero energy.
+2. Cantilever vs Timoshenko (reported only): Q4IM −0.12 … −0.48 %, ABAQUS identical; Q4 −19 % … −0.67 %.
+3. Linear vs ABAQUS CPE4I (job 45856435): Q4IM tip deflection and reaction within ≤ 2.1e-8 at every
+   ny (threshold 5e-4 at ny = 20): **pass**. Q4 locking: −19.3 / −11.1 / −2.29 / −0.195 % at
+   ny = 2 / 4 / 8 / 20. Distorted mesh: Q4IM 4.7e-6 vs CPE4I (information).
+4. NLGEOM to θ = 0.101 rad (P = 1400 N, 20 increments, tight ABAQUS tolerances):
+   v_tip ≤ 3.6e-5, clamp moment ≤ 3.0e-5 (SVK); **pass**.
+   **Flag:** u_tip relative to its own value is −1.25 % (SVK) and +0.30 % (Hencky), so it **fails 0.1 %**
+   if the threshold is applied to that component alone. Relative to |v_tip| it is 4.5e-4 / 1.1e-4.
+   Cause [D]: constitutive (changing the strain measure alone changes it 4× and flips its sign;
+   it grows ∝ load²). Residual cause [H]: hypoelastic Cauchy vs hyperelastic Kirchhoff stress.
+   Measured T-peel load-point rotation max = 0.0325 rad (sw_s40 UR3). At that rotation all
+   differences are ≤ 1.3e-4 of |v| (SVK) and ≤ 4e-5 (Hencky).
+5. Timing: see Runtime.
+- Fast suite: 17 passed on Bell (2 slow deselected; the slow NLGEOM tests replicate the job above).
+
+**Runtime.** Negishi node a001 (EPYC 7763, 4 cores): linear ny = 20 Q4IM (73 242 dofs) 1.8 s per
+solve after JIT, 3.1 s first call; ABAQUS CPE4I 6.2 s wall (includes pre-processing and licence).
+NLGEOM 20 increments: SVK 54 s including JIT (2.6 s per increment, 3 Newton iterations each);
+ABAQUS 49.7 s. Hencky 202 s (≈ 4× SVK per tangent). Laptop not measured.
+
+**Gain.** We now have a bulk element that reproduces ABAQUS CPE4I to 1e-8 in the linear regime and
+to ≤ 4e-5 in P-relevant quantities under NLGEOM up to 3× the T-peel rotation. So any later P–Δ
+mismatch in S3 cannot come from the bulk discretisation. We also know that plain Q4 at the
+production mesh is 0.195 % too stiff (5× the floor), and that the remaining NLGEOM gap is
+constitutive and second order in strain.
+
+**Cost / limitations.**
+- SVK and Hencky are hyperelastic; ABAQUS is hypoelastic. The gap is second order in strain and
+  visible only in the axial tip displacement.
+- The Hencky series is valid for strains ≲ 5 % (elastic Al only) and costs about 4× SVK.
+- ABAQUS manual citations in `ELEMENTS.md` are from memory and unverified (manual not reachable).
+- Each solve recompiles when the mesh changes (JIT); per-solve times exclude this.
+- No tatva workarounds needed.
+
+**Open items.**
+- User: accept the u_tip flag (proposed: judge NLGEOM by v, M and |Δu|/|v|), and choose the S3 bulk
+  energy. Proposed D21: Q4IM + Hencky, with SVK as a cross-check.
+- User: confirm the ABAQUS manual sections cited in `ELEMENTS.md`.
+- Laptop timing not done.

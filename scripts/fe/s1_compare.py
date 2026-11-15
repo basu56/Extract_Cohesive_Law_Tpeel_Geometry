@@ -132,29 +132,6 @@ if os.path.exists(hp):
           ["time", "U2", "UR3"])
     print(f"T-peel sw_s40: max |UR3| = {np.abs(h['UR3']).max():.4f} rad at U2 = {h['U2'][np.argmax(np.abs(h['UR3']))]:.3f} mm")
 
-import matplotlib  # noqa: E402
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt  # noqa: E402
-plt.rcParams.update({"xtick.direction": "in", "ytick.direction": "in", "font.size": 10})
-fig, ax = plt.subplots(1, 2, figsize=(10, 3.8))
-for kind, mk in (("Q4", "s"), ("Q4IM", "o")):
-    rr = [x for x in lin_rows if x["element"] == kind and x["case"].startswith("lin") and x["load"] == "force"]
-    ax[0].semilogy([x["ny"] for x in rr], [abs(x["err_v_tip"]) for x in rr], mk + "-", mfc="w", label=f"{kind} vs ABAQUS CPE4I")
-ax[0].axhline(5e-4, color="0.5", ls=":", label="threshold 0.05 %")
-ax[0].set(xlabel="elements through thickness $n_y$", ylabel=r"|tip deflection error|", xticks=[2, 4, 8, 20])
-ax[0].legend(frameon=False, fontsize=8)
-for kin, ls in (("svk", "-"), ("hencky", "--")):
-    rr = [x for x in nl_rows if x["kinematics"] == kin]
-    th = [x["theta_abq"] for x in rr]
-    for key, lab, c in (("err_v_tip", "$v_{tip}$", "C0"), ("err_u_tip", "$u_{tip}$", "C1"), ("err_M", "clamp moment", "C2")):
-        ax[1].plot(th, [abs(x[key]) for x in rr], "o" + ls, color=c, mfc="w", ms=3.5, label=f"{lab}, {kin.upper()}")
-ax[1].axhline(1e-3, color="0.5", ls=":", label="threshold 0.1 %")
-ax[1].set_yscale("log")
-ax[1].axvline(0.0325, color="0.6", lw=0.8)
-ax[1].text(0.0335, 2e-9, "T-peel max", fontsize=7, color="0.4")
-ax[1].set(xlabel="tip rotation (rad)", ylabel="|Q4IM - ABAQUS CPE4I| (relative)")
-ax[1].legend(frameon=False, fontsize=8)
-fig.tight_layout()
-for ext in ("png", "pdf"):
-    fig.savefig(os.path.join(OUT, f"s1_bulk.{ext}"), dpi=220)
+import subprocess  # noqa: E402
+subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "s1_plot.py"), OUT], check=True)
 print("done")

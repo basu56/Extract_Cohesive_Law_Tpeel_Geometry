@@ -1,6 +1,6 @@
 # Project status (handoff page)
 
-_Last updated: 2026-11-14 (night, S0) by Claude Code. Overwrite this page each session._
+_Last updated: 2026-11-14 (night, S1) by Claude Code. Overwrite this page each session._
 
 ## Where we are
 
@@ -84,5 +84,8 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
   D18 (proposed: P_peak tracks ℓ_cz/H), D19–D20 agreed, prototype `scripts/fe/prototype_dcb_tatva.py`.
 - **S0 done** [D]: uv env (Python 3.12.12, jax 0.12.0.1, tatva 0.11.6) on Bell and Negishi, CI green,
   16/16 tests everywhere; `test_laws` still OK on Python 3.6. Setup: `docs/solver/ENVIRONMENT.md`.
-- **Next: S1 (bulk element, CPE4I-equivalent) — waiting for the user's go-ahead.**
+- **S1 done** [D]: Q4IM ≡ CPE4I (1e-8 linear; NLGEOM v, M ≤ 4e-5 to 0.1 rad). Flag: u_tip 1.25 % (SVK) /
+  0.30 % (Hencky) of its own value, constitutive and 2nd order; T-peel max rotation 0.0325 rad. D21 proposed
+  (Q4IM + Hencky). `results/solver/S1_bulk/`.
+- User pre-approved continuing through the steps (2026-11-14). **Next: S2 (cohesive law and interface).**
 - Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested.

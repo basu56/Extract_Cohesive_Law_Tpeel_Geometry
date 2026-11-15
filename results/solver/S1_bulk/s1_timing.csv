@@ -1,0 +1,11 @@
+case,element,kinematics,n_dof,n_colors,newton_iters,t_first_call,t_solve_after_jit,host
+lin_ny2_F,Q4,linear,3606,18,1,4.503833493,0.476960132,a001.negishi.rcac.purdue.edu
+lin_ny2_F,Q4IM,linear,8406,34,1,1.227358901,0.534724895,a001.negishi.rcac.purdue.edu
+lin_ny4_F,Q4,linear,6010,18,1,0.939795247,0.475555014,a001.negishi.rcac.purdue.edu
+lin_ny4_F,Q4IM,linear,15610,34,1,1.105295348,0.668196382,a001.negishi.rcac.purdue.edu
+lin_ny8_F,Q4,linear,10818,18,1,1.115459248,0.608160897,a001.negishi.rcac.purdue.edu
+lin_ny8_F,Q4IM,linear,30018,34,1,1.539710024,0.984838541,a001.negishi.rcac.purdue.edu
+lin_ny20_F,Q4,linear,25242,18,1,1.592279175,1.050089838,a001.negishi.rcac.purdue.edu
+lin_ny20_F,Q4IM,linear,73242,34,1,3.147960029,1.775462369,a001.negishi.rcac.purdue.edu
+nl_ny20_F,Q4IM,svk,73242,34,60,54.11104624,2.598843899,a001.negishi.rcac.purdue.edu
+nl_ny20_F,Q4IM,hencky,73242,34,60,202.3497471,9.752671592,a001.negishi.rcac.purdue.edu

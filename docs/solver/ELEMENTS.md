@@ -64,7 +64,12 @@ the same space.
    for `*Elastic` at finite strain. We use SVK. They agree to first order in strain; test 4 measures
    the difference.
 
-## Element choice for S3
+## Measured equivalence and element choice for S3 [D]
 
-See the S1 SOLVER_LOG entry for the measured errors. Option (c) (Q8 / Tri6) is implemented only if
-Q4IM fails the thresholds.
+From S1 (`results/solver/S1_bulk/README.md`):
+- Q4IM = CPE4I to ≤ 2e-8 on the production-graded cantilever (ny = 2 … 20), and to 4.7e-6 on a
+  skewed mesh.
+- Under NLGEOM, the tip deflection and the moment agree to ≤ 4e-5 up to 0.1 rad. The axial tip
+  displacement differs by 1.25 % (SVK) or 0.30 % (Hencky) of its own small value. That difference is
+  constitutive (hyperelastic vs hypoelastic) and second order in strain.
+- Proposed (D21): Q4IM + Hencky for S3. Option (c), quadratic elements, is not needed.
