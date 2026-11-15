@@ -75,7 +75,7 @@ def test_rigid_translation_and_fd_tangent(decks):
 
 def test_linear_coupling_solve_is_linear(decks):
     """NLGEOM = NO analogue: linear kinematics + linearised coupling -> RF2 exactly proportional."""
-    m = TPeelModel(str(decks / "c_el.inp"), kinematics="linear", coupling="linear")
+    m = TPeelModel(str(decks / "c_el.inp"), kinematics="linear", coupling="linear", frame="corotational_linear")
     h = m.frozen_args(m.zero_history(), 1.0)
     out = []
     for lam in (0.5, 1.0):
@@ -102,3 +102,37 @@ def test_hencky_closed_form():
     assert np.isfinite(np.asarray(g(jnp.zeros((1, 2, 2))))).all()
     c, s = np.cos(0.3), np.sin(0.3)
     assert np.abs(np.asarray(g(jnp.asarray([[[c - 1, -s], [s, c - 1]]])))).max() < 1e-9   # rotation: no stress
+
+
+# ABAQUS 2026 COH2D4 probes (scripts/fe/build_coh_probe.py, Negishi job 45868344): S22, S12 (MPa) of
+# one elastic element (K = 8500 MPa/mm, length 1, width 1), all node displacements prescribed.
+COH2D4_PROBES = {  # job: (gap, motion, nlgeom, S22, S12)
+    "pg0_shear": (0.0, "shear", False, 0.0, 8.5),
+    "pg4_shear": (0.4, "shear", False, 0.0, 8.5),
+    "pg4_shear_nl": (0.4, "shear", True, 0.0, 8.5),
+    "pg0_rot_nl": (0.0, "rot", True, 0.0, 0.0),
+    "pg4_rot_nl": (0.4, "rot", True, 0.0, 0.0),
+    "pg4_rot": (0.4, "rot", False, -16.98583794, 0.0),
+    "pg4_open_rot_nl": (0.4, "open_rot", True, 8.5, 0.0),
+}
+
+
+@pytest.mark.parametrize("job", sorted(COH2D4_PROBES))
+def test_cohesive_kinematics_match_coh2d4_probes(job):
+    import math
+    from tslid.fe.interface import CohesiveInterface
+    g, motion, nl, S22, S12 = COH2D4_PROBES[job]
+    X = np.array([(0.0, 0.0), (1.0, 0.0), (1.0, g), (0.0, g)])
+    c, s = math.cos(0.1), math.sin(0.1)
+
+    def disp(k, x, y):
+        if motion == "shear":
+            return (1e-3, 0.0) if k in (2, 3) else (0.0, 0.0)
+        dx, dy = x - 0.5, y - g / 2
+        if motion == "open_rot" and k in (2, 3):
+            dy += 1e-3
+        return (0.5 + c * dx - s * dy - x, g / 2 + s * dx + c * dy - y)
+
+    itf = CohesiveInterface(X, [0, 1], [3, 2], 1.0, frame="corotational" if nl else "corotational_linear")
+    dn, ds = itf.separations(jnp.asarray([disp(k, *X[k]) for k in range(4)]))
+    assert np.allclose(8500.0 * np.asarray(dn), S22, atol=1e-6) and np.allclose(8500.0 * np.asarray(ds), S12, atol=1e-6)

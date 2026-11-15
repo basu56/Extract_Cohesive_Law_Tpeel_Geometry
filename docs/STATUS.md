@@ -90,11 +90,29 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
 - **S2 done** [D]: JAX cohesive interface = ABAQUS COH2D4 to ≤ 6.8e-8 σ_c (20 inviscid runs: mode I/shear/mixed,
   LIN/EXP/TAB, cyclic); viscous BE exact until D = 1 (post-failure tail ≤ 3.4e-5 σ_c, unexplained); COH2D4 uses
   **nodal** quadrature; exact gradients in (K0, σ_c, G_c, α). `results/solver/S2_interface/`.
-- User pre-approved continuing (2026-11-14), but S0_S2_INSTRUCTIONS ends at S2. **Next: S3 instructions are
-  needed** (T-peel mesh, history scheme, frame) — draft with the user / Claude Web.
-- Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested.
-
-## Update — Claude Web, 2026-11-15 (merge into the sections above at the next Claude Code session)
-- S1–S2 reviewed and accepted. D21 updated: Q4IM + SVK default, Hencky as cross-check (test in S3d).
-- **Next action for Claude Code: S3a → S3b** per `docs/solver/S3_INSTRUCTIONS.md` (D22); stop after S3b.
-- User action: check 3DS documentation access (manual citations remain unverified).
+- D21 updated (Claude Web 2026-11-15, agreed): Q4IM + **SVK** default, Hencky cross-check in S3d. D22 agreed
+  (S3 design). S3 instructions: `docs/solver/S3_INSTRUCTIONS.md`.
+- **S3a done, gate missed (explained)** [D], `results/solver/S3_tpeel/`:
+  - The T-peel is imported from the deck node for node (`inp_import.py`). Couplings are eliminated as finite
+    rigid motions (`tpeel.py`).
+  - Linear elastic T-peel = ABAQUS to 3e-8 (RF2, UR3, mouth, whole field, cohesive tractions).
+  - NLGEOM at T-peel loads: RF2 2–3e-5, UR3 5e-5, mouth 1–1.5e-5 (gate 1e-5). SVK and Hencky agree, so the
+    bulk energy is not the cause [H: the S1 Q4IM-vs-CPE4I NLGEOM floor].
+  - **Finding:** COH2D4 with a geometric gap is corotational. It measures the current gap vector in the
+    deformed mid-surface frame minus the reference gap (7 probes, `docs/solver/TPEEL.md` §3). The S2 jump
+    form would add φ × 0.4 mm of spurious shear, comparable to δ₀. Implemented and now the default.
+  - The power-series Hencky diverged on the T-peel; replaced by a closed form.
+- **S3b done** [D]: incremental potential (Ortiz–Pandolfi type incl. the viscous BE update), one Newton solve
+  per increment. It equals the S2 scheme to 1e-12 σ_c on all 20 ABAQUS single-element runs; two-block test
+  43 vs 183 iterations.
+  - Driver with line search and cutback (`incremental.py`).
+  - Coarse damaged T-peel completes: P_peak −2.2e-5 vs ABAQUS on the same deck; 670 s vs ABAQUS 256 s,
+    unoptimised.
+  - Staggered coarse comparison (Negishi job 45868159) was still running at the end of the session.
+- ABAQUS reference wall times are 36–56 min (not 20–25), from the .msg files.
+- **Stopped for user review after S3b** (as instructed, and because the S3a gate missed).
+- **Next:**
+  - User: decide on the S3a NLGEOM floor (accept 2–3e-5, or investigate CPE4I NLGEOM first).
+  - Then S3c: profiling, IM condensation, linear solver, tolerance, E4–E6 gate on the coarse deck.
+- Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested; ABAQUS manual citations
+  unverified (user checking 3DS access).

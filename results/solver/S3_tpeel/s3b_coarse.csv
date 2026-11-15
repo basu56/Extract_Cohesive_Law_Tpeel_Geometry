@@ -1,0 +1,4 @@
+solver,frame,history,increments,cutbacks,newton_total,newton_max,passes_total,ls_total,wall,P_peak,err_P_peak,err_delta_peak,max_dP,rms_dP,max_dP_prepeak
+abaqus,COH2D4,abaqus,1479,232,2910,nan,nan,nan,256,562.397,0,0,0,0,0
+tslid.fe:mono_coro,corotational,monolithic,1778,321,2551,8,1778,602,670.354,562.384,-2.24695e-05,-4.374e-05,0.00585251,0.000294824,0.00014498
+tslid.fe:monolithic_svk_global,global,monolithic,1766,315,2550,15,1766,590,514.968,562.327,-0.000123521,-4.374e-05,0.0119768,0.000413512,0.000112175

@@ -80,7 +80,25 @@ difference is ≤ 3.4e-5 σ_c in the traction-free tail (details in the S2 resul
 runs ABAQUS reports the regularisation energy outside ALLVD, consistent with `energy_checks.py`
 using ALLCD.
 
+## Update 2026-11-15 (S3a): separations with a geometric gap [D]
+
+Single-COH2D4 probes with a 0.4 mm gap (`scripts/fe/build_coh_probe.py`, Negishi job 45868344) show
+that COH2D4 does **not** use the displacement jump [[u]]. It uses the current gap vector in the
+deformed mid-surface frame minus the reference gap, and the linearisation of that with
+NLGEOM = NO.
+
+The "Our formulation" bullet above, which says the jump in the reference frame and that
+"midsurface" is what COH2D4 does, is therefore superseded for gapped elements. It remains exact for
+the S2 zero-gap element.
+
+Implemented as `frame="corotational"` / `"corotational_linear"`. The S2 tests (zero gap) are
+unchanged. Details and the probe table: `docs/solver/TPEEL.md` §3.
+
+S3b adds the incremental potential `psi_incremental` (monolithic history): `docs/solver/TPEEL.md` §4.
+
 ## Open items
 
-- Deformed-frame separations (COH2D4 under NLGEOM): S3.
+- Deformed-frame separations (COH2D4 under NLGEOM): resolved in S3a (above).
+- Interface integration over the reference vs the current length under bond-line stretch: not
+  probed; reference length is used (stretch ≤ 1e-3 in the T-peel).
 - Manual citations above: user to confirm.
