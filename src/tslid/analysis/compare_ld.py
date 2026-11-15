@@ -9,8 +9,8 @@ For each job vs the reference (both from <job>_response.csv, <job>.json, <job>_p
     slope0      initial stiffness (secant to 20 % of P_peak), relative change
     dP_post_max max |P - P_ref| / P_peak,ref over the common post-peak window
     dP_post_rms rms of the same
-The common window ends at the smallest delta (over all jobs) at which the traction-free tip
-reaches L - 15 mm (end effect excluded, as in energy_checks.py). The post-peak window starts at
+The common window ends at the smallest delta (over all jobs) at which the sigma_c front
+(opening = delta_0, leading edge of the cohesive zone) reaches L - 15 mm (end effect excluded). The post-peak window starts at
 1.2 x the largest delta_peak. Writes <out>_summary.csv and <out>.png/.pdf
 (a: P/W vs delta; b: (P - P_ref)/P_peak,ref vs delta). Needs numpy, matplotlib.
 """
@@ -31,8 +31,11 @@ def load(rundir, job):
     p = json.load(open(os.path.join(rundir, job + '.json')))['params']
     r = read_csv(os.path.join(rundir, job + '_response.csv'))
     law = AlphaLaw(p['K0'], p['sigc'], p['Gc'], p['alpha'])
-    xf, _ = zone_fronts(rundir, job, p, law)
-    hit = np.nonzero(xf > p['L'] - 15.0)[0]
+    # window end: the sigma_c front (leading edge of the cohesive zone) reaches L - 15 mm.
+    # Using the traction-free tip instead lets the end-of-ligament collapse into the window
+    # when l_cz is long (alpha sweep, sigma_c 21, alpha 7).
+    _, x0 = zone_fronts(rundir, job, p, law)
+    hit = np.nonzero(x0 > p['L'] - 15.0)[0]
     d_end = r['delta'][hit[0]] if len(hit) else r['delta'][-1]
     return dict(job=job, p=p, d=r['delta'], P=r['P'], d_end=float(d_end))
 
