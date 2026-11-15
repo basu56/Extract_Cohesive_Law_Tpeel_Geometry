@@ -25,7 +25,8 @@ Reported (gates from docs/solver/S3_INSTRUCTIONS.md, S3d item 4):
                elements (h_coh)                                            gate |.| <= 2 elements
   tip          traction-free crack tip x(delta) (energy_checks.zone_fronts): max |dx| over the
                window where both exist, mm and elements; same for the sigma_c front
-  E4-E6        energy_checks.check for both runs                           gate: all pass, both
+  E4-E6        energy_checks.check(window='front') for both runs (D26: the load-comparison window);
+               the default-window values are reported as *_tipwin_*        gate: all pass, both
 """
 import argparse
 import json
@@ -83,7 +84,10 @@ def compare(rd_ref, job_ref, rd_new, job_new):
     sa, sb = slope(a['d'], a['P'], Pa), slope(b['d'], b['P'], Pa)
     out.update(slope_ref=sa, slope_new=sb, dslope=(sb - sa) / sa)
     # cohesive zone and crack tip
-    ca, cb = check(rd_ref, job_ref), check(rd_new, job_new)
+    ca, cb = check(rd_ref, job_ref, 'front'), check(rd_new, job_new, 'front')        # D26
+    ta, tb = check(rd_ref, job_ref), check(rd_new, job_new)                          # default window, info
+    for k in ('E_bal', 'vd_rel', 'diss_rel', 'pass_E4', 'pass_E5', 'pass_E6'):
+        out[k + '_tipwin_ref'], out[k + '_tipwin_new'] = ta.get(k), tb.get(k)
     for k in ('E_bal', 'E_bal_full', 'vd_rel', 'diss_rel', 'l_cz', 'l_cz_std', 'n_el_cz', 'n_steady',
               'pass_E4', 'pass_E5', 'pass_E6', 'completed'):
         out[k + '_ref'], out[k + '_new'] = ca.get(k), cb.get(k)
@@ -133,8 +137,11 @@ def fmt(o):
          '  crack tip: max |dx| %.4f mm (%.2f el.) at delta %.4f; sigma_c front max |dx| %.4f mm (%.2f el.)'
          % (o.get('max_dtip', np.nan), o.get('max_dtip_elements', np.nan), o.get('max_dtip_delta', np.nan),
             o.get('max_dfront', np.nan), o.get('max_dfront_elements', np.nan)),
-         '  E4 %.1e / %.1e, E5 %.1e / %.1e, E6 %+.1e / %+.1e (new / ref)'
+         '  E4 %.1e / %.1e, E5 %.1e / %.1e, E6 %+.1e / %+.1e (new / ref; front window, D26)'
          % (o['E_bal_new'], o['E_bal_ref'], o['vd_rel_new'], o['vd_rel_ref'], o['diss_rel_new'], o['diss_rel_ref']),
+         '  default (tip) window: E4 %.1e / %.1e, E5 %.1e / %.1e, E6 %+.1e / %+.1e'
+         % (o['E_bal_tipwin_new'], o['E_bal_tipwin_ref'], o['vd_rel_tipwin_new'], o['vd_rel_tipwin_ref'],
+            o['diss_rel_tipwin_new'], o['diss_rel_tipwin_ref']),
          '  gates: %s -> %s; target 0.1 %%: %s' % (o['gates'], 'PASS' if o['all_gates_pass'] else 'FAIL',
                                                   o['target_max_dP'])]
     return '\n'.join(L)

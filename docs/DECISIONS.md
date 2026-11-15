@@ -353,3 +353,22 @@ Decision (user, S3c review):
    - Batching, GPU and the increment strategy (S4b) are deferred until after S5.
 4. Stop for review after S3e.
 Status: **agreed**.
+
+## 2026-11-15 — D26: S3d/S3e review — energy-check window for cross-solver comparisons; S3 accepted; S4a
+Decision (user):
+1. For cross-solver comparisons, E4–E6 are evaluated over the same window as the load comparison:
+   until the σ_c front reaches L − 15 mm (compare_ld.py), for both solvers.
+   - It is implemented as `energy_checks.py --window front` (`check(..., window='front')`).
+   - The default (`tip`) is unchanged, so earlier ABAQUS-only results reproduce.
+   - `compare_solvers.py` uses `front` for its gate and reports the default window as information.
+2. S3d/S3e accepted: all gates pass, SVK stays, the corotational cohesive frame stays.
+3. S4a:
+   - Rerun all σ_c and α sweep runs at G_c = 0.4 with tslid.fe. That is 21 laws in 23 ABAQUS runs,
+     since `as_s40_a0` and `as_s21_a0` repeat `sw_s40` and `sw_s21`.
+   - Compare each against ABAQUS with `compare_solvers.py`: load gates and windowed energy checks.
+   - For each matched-peak (σ_c, α) pair of D18 (`results/phase1b_alpha/README.md`), compute the
+     pair's pre-peak difference in both solvers and show that they agree.
+   - Stop for review after S4a.
+4. S5 instructions will come from Claude Web (`apply_solver_S5.sh`, `S5_INSTRUCTIONS.md`); S5 does
+   not start before they arrive.
+Status: **agreed**.

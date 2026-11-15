@@ -3,7 +3,7 @@
 energy_checks.py -- simulation-level energy constraints (RESEARCH_PLAN.md section 4b)
 and process-zone length for T-peel runs of build_tpeel_inp.py + extract_tpeel_odb.py.
 
-    python3 energy_checks.py <rundir> [--pattern 'pz_*'] [--out summary.csv]
+    python3 energy_checks.py <rundir> [--pattern 'pz_*'] [--out summary.csv] [--window tip|front]
 
 Per run (<job>.json + <job>_response.csv):
     E4  E_bal   = max over the analysis window (W_ext > 5 % of final, crack tip <= L - 15 mm) of
@@ -21,6 +21,9 @@ Per run (<job>.json + <job>_response.csv):
                   (SDEG-threshold fronts are NOT used: biased, D14. l_pz is undefined, D14.)
     P_peak, delta_peak, completed (from .sta)
 Steady window: traction-free tip (delta = delta_f) in [a0 + 5 mm, L - 15 mm] (needs numpy).
+--window front (D26, cross-solver comparisons): the E4/E5 window and the E6 steady range end at the
+first frame where the sigma_c front passes L - 15 mm, the end of the compare_ld.py load window.
+The default (tip) is unchanged.
 """
 import argparse
 import csv
@@ -76,7 +79,11 @@ def zone_fronts(rundir, job, p, law):
     return xf, x0
 
 
-def check(rundir, job):
+def check(rundir, job, window='tip'):
+    """Energy checks of one run.  window='tip' (default, unchanged since D10/D14): E4/E5 window ends
+    when the traction-free tip passes L - 15 mm.  window='front' (D26, cross-solver comparisons): it
+    ends where compare_ld.py ends the load comparison, at the first frame where the sigma_c front
+    passes L - 15 mm; the E6 steady range is cut there too."""
     meta = json.load(open(os.path.join(rundir, job + '.json')))
     p, lw = meta['params'], meta['law']['TIP']
     out = dict(job=job, Gc=lw['G'], sigc=lw['sig'], alpha=lw.get('alpha', 0.0),
@@ -99,7 +106,16 @@ def check(rundir, job):
     # E4 is evaluated over the analysis window: until the traction-free tip passes L - 15 mm
     # (frames before any traction-free point exists are included). The last ~2H of ligament
     # fails unstably (end effect); its residual is reported separately as E_bal_full.
-    win = m & ~(xf > p['L'] - 15.0)
+    if window == 'front':
+        hit = np.nonzero(x0 > p['L'] - 15.0)[0]
+        before = np.arange(len(Wx)) < (hit[0] if len(hit) else len(Wx))
+        win = m & before
+    elif window == 'tip':
+        before = np.ones(len(Wx), bool)
+        win = m & ~(xf > p['L'] - 15.0)
+    else:
+        raise ValueError("window must be 'tip' or 'front'")
+    out['window'] = window
     out['E_bal'] = float(np.nanmax(res[win])) if win.any() else np.nan
     out['E_bal_full'] = float(np.nanmax(res[m])) if m.any() else np.nan
     out['has_ALLCD'] = 'ALLCD' in r
@@ -107,7 +123,7 @@ def check(rundir, job):
     i = int(np.nanargmax(r['P']))
     out.update(P_peak=float(r['P'][i]), delta_peak=float(r['delta'][i]), delta_end=float(r['delta'][-1]))
     ell1 = xf
-    s = (ell1 >= p['a0'] + 5.0) & (ell1 <= p['L'] - 15.0) & np.isfinite(x0)
+    s = (ell1 >= p['a0'] + 5.0) & (ell1 <= p['L'] - 15.0) & np.isfinite(x0) & before
     out['n_steady'] = int(s.sum())
     out['ell_end'] = float(np.nanmax(ell1)) if np.isfinite(ell1).any() else np.nan
     if s.sum() >= 5:
@@ -129,9 +145,11 @@ def main():
     ap.add_argument('rundir')
     ap.add_argument('--pattern', default='*')
     ap.add_argument('--out', default='energy_summary.csv')
+    ap.add_argument('--window', default='tip', choices=['tip', 'front'],
+                    help="E4-E6 window end: traction-free tip (default) or sigma_c front (D26) at L - 15 mm")
     o = ap.parse_args()
     jobs = sorted(os.path.basename(j)[:-5] for j in glob.glob(os.path.join(o.rundir, o.pattern + '.json')))
-    res = [check(o.rundir, j) for j in jobs]
+    res = [check(o.rundir, j, o.window) for j in jobs]
     keys = ['job', 'Gc', 'sigc', 'alpha', 'phi_e', 'h_coh', 'completed', 'status', 'P_peak', 'delta_peak',
             'delta_end', 'ell_end', 'n_steady', 'l_ch_H', 'l_cz', 'l_cz_std', 'l_cz_H', 'n_el_cz', 'E_bal', 'E_bal_full', 'has_ALLCD', 'vd_rel',
             'diss_rel', 'pass_E4', 'pass_E5', 'pass_E6']
