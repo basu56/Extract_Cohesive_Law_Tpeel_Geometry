@@ -147,3 +147,22 @@ def test_abaqus_like_outputs_and_schedule_replay(weak_deck, tmp_path):
     b = run(S, st["T"], st["dt0"], st["dtmin"], st["dtmax"], SolverOptions(rtol=1e-6), max_increments=25,
             newton=newton_energy, schedule=times)
     assert [l.t for l in b.log] == pytest.approx(times, rel=1e-13)
+
+
+def test_linear_solver_fallback(monkeypatch):
+    """D24: without pypardiso/MKL, make_solver warns and falls back to SuperLU (MMD), same solution."""
+    import scipy.sparse as sps
+    from tslid.fe import linsolve
+    rng = np.random.default_rng(0)
+    A = sps.random(60, 60, density=0.1, random_state=1) + 10 * sps.eye(60)
+    A = (A + A.T).tocsr()
+    b = rng.standard_normal(60)
+    monkeypatch.setitem(sys.modules, "pypardiso", None)          # import pypardiso -> ImportError
+    with pytest.warns(RuntimeWarning, match="falling back"):
+        s = linsolve.make_solver("pardiso_sym")
+    assert s.name == "superlu_mmd" and s.requested == "pardiso_sym"
+    x = s(A, b)
+    assert np.abs(A @ x - b).max() <= 1e-12 * np.abs(b).max()
+    with pytest.raises(ImportError):
+        linsolve.make_solver("pardiso_sym", fallback=None)
+    assert linsolve.make_solver("superlu").name == "superlu"

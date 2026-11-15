@@ -2,6 +2,9 @@
 
 Units: mm, N, MPa, s.  Coarse decks run anywhere; production decks via sbatch.
     python scripts/fe/s3_run_tpeel.py <deck.inp> <outdir> [--history monolithic|staggered]
+        (defaults since S3d = D24: --newton energy --assembly element --condense --linsolve pardiso_sym
+         --diverge-after 4 --rtol 1e-6; the S3b path is --newton residual --assembly jacfwd
+         --linsolve superlu --diverge-after 0 --rtol 1e-10)
         [--kinematics svk|hencky] [--frame global|midsurface] [--rtol 1e-10] [--tag name]
         [--max-increments N]
 
@@ -25,7 +28,7 @@ import numpy as np
 
 import tslid.fe  # noqa: F401
 from tslid.fe.incremental import SolverOptions, newton_energy, newton_ls, run
-from tslid.fe.linsolve import SOLVERS
+from tslid.fe.linsolve import SOLVERS, make_solver
 from tslid.fe.tpeel import TPeelModel
 
 ap = argparse.ArgumentParser()
@@ -34,20 +37,22 @@ ap.add_argument("outdir")
 ap.add_argument("--history", default="monolithic")
 ap.add_argument("--kinematics", default="svk")
 ap.add_argument("--frame", default=None)
-ap.add_argument("--rtol", type=float, default=1e-10)
+ap.add_argument("--rtol", type=float, default=1e-6)                 # D24
 ap.add_argument("--tag", default=None)
 ap.add_argument("--max-increments", type=int, default=10 ** 6)
 ap.add_argument("--verbose", action="store_true")
 ap.add_argument("--summary-every", type=int, default=50)
-ap.add_argument("--newton", default="residual", choices=["residual", "energy"],
+ap.add_argument("--newton", default="energy", choices=["residual", "energy"],
                 help="residual: S3b newton_ls; energy: S3c newton_energy (jitted q-energy, Armijo)")
-ap.add_argument("--assembly", default="jacfwd", choices=["jacfwd", "element"])
-ap.add_argument("--condense", action="store_true", help="condense the incompatible modes (element assembly)")
-ap.add_argument("--linsolve", default="superlu", choices=sorted(SOLVERS))
+ap.add_argument("--assembly", default="element", choices=["jacfwd", "element"])
+ap.add_argument("--condense", action=argparse.BooleanOptionalAction, default=True,
+                help="condense the incompatible modes (element assembly; D24 default on)")
+ap.add_argument("--linsolve", default="pardiso_sym", choices=sorted(SOLVERS),
+                help="falls back to superlu_mmd if pypardiso/MKL is unavailable (D24)")
 ap.add_argument("--no-abaqus-out", action="store_true",
                 help="skip <job>_<tag>_response.csv / _profiles.npz / .json / .sta (tpeel_output.py)")
 ap.add_argument("--schedule", default=None, help="CSV of a previous run: reuse its increment end times")
-ap.add_argument("--diverge-after", type=int, default=0, help="newton_energy divergence check (0 = off)")
+ap.add_argument("--diverge-after", type=int, default=4, help="newton_energy divergence check (0 = off; D24: 4)")
 ap.add_argument("--cprofile", action="store_true", help="also write <job>_<tag>_cprofile.txt (top 40 by cumtime)")
 a = ap.parse_args()
 job = os.path.basename(a.deck)[:-4]
@@ -60,9 +65,11 @@ M = m
 if a.assembly == "element":
     from tslid.fe.assembly import ElementSystem
     M = ElementSystem(m, condense=a.condense)
+elif a.condense:
+    a.condense = False                                          # condensation needs element assembly
     if a.newton != "energy":
         raise SystemExit("--assembly element needs --newton energy")
-solver = SOLVERS[a.linsolve]()
+solver = make_solver(a.linsolve)
 t_setup = time.perf_counter() - t0
 st = m.deck.step["static"]
 print(f"{job}: n_q {m.n_q} free {len(m.free)} colours {m.n_colors} law {m.law_kind} {m.law_params} "
@@ -129,7 +136,8 @@ def summary(complete, res=None):
              t_tangent=float(sum(l.t_tangent for l in L)), t_solve=float(sum(l.t_solve for l in L)),
              t_history=float(sum(l.t_history for l in L)), t_ls=float(sum(l.t_ls for l in L)),
              t_increments=float(sum(l.wall for l in L)), t_io=state["t_io"],
-             newton=a.newton, assembly=a.assembly, condense=a.condense, linsolve=a.linsolve,
+             newton=a.newton, assembly=a.assembly, condense=a.condense, linsolve=solver.name,
+             linsolve_requested=a.linsolve,
              n_sys=int(getattr(M, "n_sys", len(m.free))),
              timers={k: float(v) for k, v in {**m.timers, **M.timers}.items()},
              counts={**m.counts, **M.counts},

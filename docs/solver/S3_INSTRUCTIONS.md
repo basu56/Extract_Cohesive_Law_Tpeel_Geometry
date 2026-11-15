@@ -227,6 +227,19 @@ S3d adds one item: report where along the bond the S3a cohesive-traction differe
 
    Measured numbers only.
 
+**Update 2026-11-15 (user, S3c review; D24 agreed, D25).**
+- Defaults are the D24 configuration (rtol 1e-6), with an automatic SuperLU fallback when PARDISO
+  is unavailable.
+- Toggle 2 (interface frame): S3a showed that COH2D4 is corotational with a gap correction, and
+  that is the default since S3a. The toggle compares it with the `global` frame and with the
+  rotated frame without gap correction (`midsurface`, the frame item 5 describes).
+- Item 6 (timing) follows the D25 protocol: one SLURM job on one node, in sequence, run ABAQUS
+  (default deck), ABAQUS with field output thinned to what tslid.fe writes, then tslid.fe on 1
+  and on 4 threads. Ratios come from that job.
+- Stop for review after S3e.
+- S4 is redefined: S4a reruns the 21 σ_c and α sweep runs against ABAQUS; S5 (gradients) follows;
+  batching, GPU and the increment strategy (S4b) come after S5.
+
 ### S3e — The four extreme cases
 
 Run `sw_s58`, `sw_s21`, `as_s21_am3` and `as_s21_a7` with the S3d defaults. Apply the same

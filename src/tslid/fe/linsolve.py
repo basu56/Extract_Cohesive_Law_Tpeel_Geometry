@@ -115,3 +115,23 @@ class PardisoSym(Pardiso):
 
 
 SOLVERS = {"superlu": SuperLU, "superlu_mmd": SuperLU_MMD, "pardiso": Pardiso, "pardiso_sym": PardisoSym}
+
+DEFAULT = "pardiso_sym"          # D24
+FALLBACK = "superlu_mmd"         # fastest SuperLU variant in the S3c benchmark
+
+
+def make_solver(name=DEFAULT, fallback=FALLBACK):
+    """Solver object for ``name``.  If it cannot be created because pypardiso / MKL is unavailable
+    (no x86_64 wheel, e.g. Apple Silicon, or no libmkl_rt), warn and return ``fallback`` instead
+    (D24).  The returned object has ``.name`` (the solver actually used) and ``.requested``."""
+    import warnings
+    try:
+        s = SOLVERS[name]()
+    except (ImportError, OSError) as e:
+        if fallback is None:
+            raise
+        warnings.warn("linear solver %r unavailable (%s); falling back to %r" % (name, e, fallback),
+                      RuntimeWarning, stacklevel=2)
+        s = SOLVERS[fallback]()
+    s.requested = name
+    return s

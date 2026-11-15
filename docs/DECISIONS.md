@@ -324,3 +324,32 @@ Evidence [D] (SOLVER_LOG S3c):
   whole-curve max 8.1e-5 P_peak in the window; E4–E6 equal to ABAQUS's.
 Not changed: increments as ABAQUS (D16/D22); a looser tolerance does not reduce the increments.
 Status: **proposed**, to be confirmed at the S3c review.
+
+## 2026-11-15 — D24 update: agreed
+User (S3c review): D24 confirmed as proposed:
+- element assembly;
+- IM condensation;
+- PARDISO symmetric with analysis reuse;
+- early abandoning (divergence check after iteration 4);
+- rtol = 1e-6;
+- `pypardiso` as a dependency.
+Addition: an automatic SuperLU fallback when pypardiso/MKL is unavailable (e.g. Apple Silicon), with
+a test. SuiteSparse is not installed.
+Status: **agreed**.
+
+## 2026-11-15 — D25: S3c review decisions (timing protocol, condensation check, S4/S5 order)
+Decision (user, S3c review):
+1. The condensed IM step is verified by its residual (backward error) on the full system, in place
+   of "same Newton step to 1e-12" (cond(K) ≈ 3e8 makes forward agreement solver-dependent).
+2. Publishable timing protocol: one SLURM job on one pinned node runs, in sequence:
+   - ABAQUS, default deck;
+   - ABAQUS with field output thinned to what our run writes;
+   - tslid.fe on 1 thread;
+   - tslid.fe on 4 threads.
+   Ratios are reported from that job only. Earlier cross-job ratios are indicative.
+3. Order after S3e:
+   - S4a: rerun all 21 σ_c and α sweep runs with tslid.fe and compare each against ABAQUS.
+   - Then S5 (gradients).
+   - Batching, GPU and the increment strategy (S4b) are deferred until after S5.
+4. Stop for review after S3e.
+Status: **agreed**.
