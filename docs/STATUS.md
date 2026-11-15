@@ -93,3 +93,8 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
 - User pre-approved continuing (2026-11-14), but S0_S2_INSTRUCTIONS ends at S2. **Next: S3 instructions are
   needed** (T-peel mesh, history scheme, frame) — draft with the user / Claude Web.
 - Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested.
+
+## Update — Claude Web, 2026-11-15 (merge into the sections above at the next Claude Code session)
+- S1–S2 reviewed and accepted. D21 updated: Q4IM + SVK default, Hencky as cross-check (test in S3d).
+- **Next action for Claude Code: S3a → S3b** per `docs/solver/S3_INSTRUCTIONS.md` (D22); stop after S3b.
+- User action: check 3DS documentation access (manual citations remain unverified).

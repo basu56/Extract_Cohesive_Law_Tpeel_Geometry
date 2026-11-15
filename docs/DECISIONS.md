@@ -251,3 +251,44 @@ than SVK in the axial tip displacement and the clamp moment, at 4× the cost.
 Proposal: use Q4IM with the Hencky energy in S3, and keep SVK as a cross-check. Judge NLGEOM agreement
 by v_tip, the reaction moment and |Δu|/|v|, not by u_tip relative to its own value.
 Status: **proposed** (needs the user's agreement; it also closes the S1 u_tip flag).
+
+## 2026-11-15 — D21 update: SVK default, Hencky as cross-check (supersedes the D21 proposal)
+Decision (user, on Claude Web's recommendation): the T-peel adherends in `tslid.fe` use **Q4IM
+with the St. Venant–Kirchhoff energy** by default. Hencky is kept as a cross-check and run once
+on the S3d reference case.
+Rationale:
+- [D] The SVK–CPE4I difference appears only in the axial tip displacement relative to its own
+  small value (1.25 %). Deflection and moment agree within 4e-5 with either energy, and
+  |Δu|/|v| ≤ 4.5e-4.
+- [D] The S1 test went to 0.10 rad, while the T-peel arm peaks at 0.0325 rad (`sw_s40`).
+  [H] The constitutive difference shrinks at least in proportion to the rotation, so it will be
+  smaller in the T-peel than in S1.
+- [D] Hencky costs about 4× per tangent (9.8 vs 2.6 s per increment at 73k dofs).
+Acceptance test (S3d): whole-curve |ΔP| between SVK and Hencky ≤ 0.01 % of P_peak on `sw_s40`
+→ SVK stays. Otherwise, report to the user.
+NLGEOM agreement is judged by v_tip, the reaction moment and |Δu|/|v|, as proposed. This closes
+the S1 u_tip flag.
+Status: **agreed** (conditional on the S3d acceptance test).
+
+## 2026-11-15 — D22: S3 design choices
+- Mesh imported from the ABAQUS deck node for node.
+- Kinematic couplings modelled as rigid reference-point dofs (u1, u2, θ) by elimination.
+- Damage and displacement solved monolithically via an incremental potential
+  (Ortiz–Pandolfi type, including the viscous backward-Euler update) as the default; the
+  staggered scheme is kept for cross-checks.
+- Incompatible modes condensed in the linear solve.
+- Linear solver chosen by benchmark.
+- Same increments as ABAQUS (D16) for S3. Reducing them is an S4 question with its own
+  accuracy check.
+- Gates on the five reference cases (`sw_s40`, `sw_s58`, `sw_s21`, `as_s21_am3`, `as_s21_a7`):
+  whole-curve |ΔP| ≤ 0.5 % P_peak, |ΔP_peak| ≤ 0.1 %, Δδ_peak within one increment, ℓ_cz within
+  2 elements, E4–E6 pass. Target ≤ 0.1 %.
+Instructions: `docs/solver/S3_INSTRUCTIONS.md`.
+Status: **agreed**.
+
+## 2026-11-15 — Note on manual citations (S1/S2)
+The ABAQUS manual sections cited in `ELEMENTS.md` and `INTERFACE.md` stay marked
+**unverified** until someone with documentation access checks them. The user will check
+whether Purdue's SIMULIA licence gives a 3DS account. The probe runs are the evidence. In
+manuscripts, cite only sections that have been checked.
+Status: **agreed**.
