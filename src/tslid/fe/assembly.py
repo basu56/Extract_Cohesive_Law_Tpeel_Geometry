@@ -324,6 +324,14 @@ class ElementSystem:
                 dq = dq.at[jnp.asarray(g.qidx[:, g.i_slots]).ravel()].set(da.ravel())
             return dq[:n_q]
 
+        def bulk_energy(q):
+            E = 0.0
+            for g, f in zip(groups, efs):
+                if g.kind == "bulk":
+                    E = E + jnp.sum(jax.vmap(f, in_axes=(0, 0, 0, None))(gather(q, g), g.consts, (), ()))
+            return E
+
+        self._bulkE = jax.jit(bulk_energy)
         cg = [g for g in groups if g.kind == "coh"]
         sfs = [self._elem_seps(g) for g in cg]
 
@@ -431,6 +439,10 @@ class ElementSystem:
         jax.block_until_ready(Dv)
         self._tick("history", t0)
         return out
+
+    def bulk_energy(self, q):
+        """Strain energy of the adherends (N*mm)."""
+        return float(self._bulkE(jnp.asarray(q)))
 
     def separations(self, q):
         return self._seps(jnp.asarray(q))

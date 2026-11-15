@@ -44,6 +44,8 @@ ap.add_argument("--newton", default="residual", choices=["residual", "energy"],
 ap.add_argument("--assembly", default="jacfwd", choices=["jacfwd", "element"])
 ap.add_argument("--condense", action="store_true", help="condense the incompatible modes (element assembly)")
 ap.add_argument("--linsolve", default="superlu", choices=sorted(SOLVERS))
+ap.add_argument("--no-abaqus-out", action="store_true",
+                help="skip <job>_<tag>_response.csv / _profiles.npz / .json / .sta (tpeel_output.py)")
 ap.add_argument("--diverge-after", type=int, default=0, help="newton_energy divergence check (0 = off)")
 ap.add_argument("--cprofile", action="store_true", help="also write <job>_<tag>_cprofile.txt (top 40 by cumtime)")
 a = ap.parse_args()
@@ -81,7 +83,19 @@ for X in {id(m): m, id(M): M}.values():
     X.counts.clear()
 
 
+writer = None
+if not a.no_abaqus_out:
+    from tslid.fe.assembly import ElementSystem
+    from tslid.fe.tpeel_output import TPeelWriter
+    writer = TPeelWriter(M if a.assembly == "element" else ElementSystem(m), a.deck[:-4] + ".json", a.outdir,
+                         f"{job}_{tag}")
+
+
 def rec(m, t, q, hist, h, r):
+    if writer is not None:
+        tw = time.perf_counter()
+        writer.add(t, q, hist, float(r[m.out["rp1_u2"]]), float(q[m.out["rp1_u2"]] - q[m.out["rp2_u2"]]))
+        state["t_io"] += time.perf_counter() - tw
     return dict(time=t, delta=q[m.out["rp1_u2"]] - q[m.out["rp2_u2"]], P=r[m.out["rp1_u2"]],
                 UR3=q[m.out["rp1_ur3"]], mouth_u=q[m.out["mouth_u_u2"]], mouth_l=q[m.out["mouth_l_u2"]],
                 Dmax=float(np.max(np.asarray(hist["D"]))), n_failed=int(np.sum(np.asarray(hist["D"]) >= 1.0)))
@@ -147,6 +161,8 @@ def on_inc(row, l):
     state["fh"].flush()
     if l is not None and len(state["logs"]) % a.summary_every == 0:
         summary(False)
+        if writer is not None:
+            writer.write_profiles()
     state["t_io"] += time.perf_counter() - t0
 
 
@@ -166,4 +182,6 @@ if a.cprofile:
     pstats.Stats(prof, stream=buf).sort_stats("tottime").print_stats(30)
     open(os.path.join(a.outdir, f"{job}_{tag}_cprofile.txt"), "w").write(buf.getvalue())
 state["fh"].close()
+if writer is not None:
+    writer.close(completed=not res.failed)
 print(json.dumps(summary(True, res), indent=1))

@@ -8,7 +8,7 @@ set -u
 REPO=${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}
 DIR=${1:?rundir}
 mkdir -p "$DIR"
-C=${SLURM_CPUS_PER_TASK:-1}
+C=$(nproc)    # cores granted by the cgroup (SLURM_CPUS_PER_TASK was unreliable: 17)
 export MKL_NUM_THREADS=$C OMP_NUM_THREADS=$C
 echo "$(date) repo $(git -C "$REPO" rev-parse --short HEAD) host $(hostname) cpus $C"
 cd "$REPO"

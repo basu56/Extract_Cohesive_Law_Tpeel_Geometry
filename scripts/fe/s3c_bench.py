@@ -38,7 +38,7 @@ ap.add_argument("--lam", type=float, default=0.06)
 ap.add_argument("--reps", type=int, default=5)
 ap.add_argument("--solvers", default="superlu,superlu_mmd,pardiso,pardiso_sym")
 a = ap.parse_args()
-res = dict(deck=os.path.abspath(a.deck), lam=a.lam, reps=a.reps, cpus=os.environ.get("SLURM_CPUS_PER_TASK"),
+res = dict(deck=os.path.abspath(a.deck), lam=a.lam, reps=a.reps, cpus=len(os.sched_getaffinity(0)),
            mkl_threads=os.environ.get("MKL_NUM_THREADS"), xla=os.environ.get("XLA_FLAGS", ""))
 
 
