@@ -18,9 +18,10 @@ def main(paths):
         out, header = open(path[:-4] + '_coh.csv', 'w'), False
         for k, fr in enumerate(step.frames):
             fo = fr.fieldOutputs
-            if 'S' not in fo.keys() or 'E' not in fo.keys():
+            ek = 'E' if 'E' in fo.keys() else ('LE' if 'LE' in fo.keys() else None)
+            if 'S' not in fo.keys() or ek is None:
                 continue                     # frame 0 / adherend-only frames
-            S, E = fo['S'], fo['E']
+            S, E = fo['S'], fo[ek]           # NLGEOM: the strain request is written as LE
             if not header:
                 out.write(','.join(['frame', 'time', 'el', 'ip'] + ['S_' + c for c in S.componentLabels] +
                                    ['E_' + c for c in E.componentLabels]) + '\n')

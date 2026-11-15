@@ -27,13 +27,14 @@ def main(paths):
                 if k in reg.historyOutputs:
                     H[k] = list(reg.historyOutputs[k].data)
         f0 = step.frames[0].fieldOutputs
-        sl, el = list(f0['S'].componentLabels), list(f0['E'].componentLabels)
+        ek = 'E' if 'E' in f0.keys() else 'LE'          # NLGEOM writes the strain request as LE
+        sl, el = list(f0['S'].componentLabels), list(f0[ek].componentLabels)
         out = open(path[:-4] + '_ip.csv', 'w')
         out.write(','.join(['frame', 'time', 'ip'] + sl + el + ['SDEG', 'ALLSE', 'ALLDMD', 'ALLVD', 'ALLWK']) + '\n')
         for k, fr in enumerate(step.frames):
             fo = fr.fieldOutputs
             S = dict((v.integrationPoint, v.data) for v in fo['S'].values)
-            E = dict((v.integrationPoint, v.data) for v in fo['E'].values)
+            E = dict((v.integrationPoint, v.data) for v in fo[ek].values)
             D = dict((v.integrationPoint, v.data) for v in fo['SDEG'].values) if 'SDEG' in fo.keys() else {}
             en = ['%.10g' % nearest(H.get(n, []), fr.frameValue) for n in ('ALLSE', 'ALLDMD', 'ALLVD', 'ALLWK')]
             for ip in sorted(S):
