@@ -29,6 +29,12 @@ C = ["#2a78d6", "#eb6834", "#1baf7a", "#8a5cd1"]
 FLAT = ("gates",)
 
 
+def done(rd, job):
+    """Completed tslid.fe run (tpeel_output.py writes <job>.sta only when the step completed)."""
+    p = os.path.join(rd, job + ".sta")
+    return os.path.exists(p) and "COMPLETED SUCCESSFULLY" in open(p).read()
+
+
 def flat(o, **extra):
     r = dict(extra)
     for k, v in o.items():
@@ -57,8 +63,8 @@ D = os.path.join(ROOT, "solver_S3d")
 abq = os.path.join(ROOT, REF["sw_s40"])
 for tag in ("default", "hencky", "frame_global", "frame_midsurface"):
     job = f"sw_s40_{tag}"
-    if not os.path.exists(os.path.join(D, job + "_response.csv")):
-        print("missing", job)
+    if not done(D, job):
+        print("missing or incomplete", job)
         continue
     o = compare(abq, "sw_s40", D, job)
     print(fmt(o))
@@ -70,8 +76,8 @@ for tag in ("default", "hencky", "frame_global", "frame_midsurface"):
 E = os.path.join(ROOT, "solver_S3e")
 for case in ("sw_s58", "sw_s21", "as_s21_am3", "as_s21_a7"):
     job = f"{case}_default"
-    if not os.path.exists(os.path.join(E, job + "_response.csv")):
-        print("missing", job)
+    if not done(E, job):
+        print("missing or incomplete", job)
         continue
     o = compare(os.path.join(ROOT, REF[case]), case, E, job)
     print(fmt(o))
@@ -87,7 +93,7 @@ import matplotlib.pyplot as plt  # noqa: E402
 plt.rcParams.update({"xtick.direction": "in", "ytick.direction": "in", "font.size": 10})
 cases = [("sw_s40", D, "sw_s40_default")] + [(c, E, f"{c}_default") for c in ("sw_s58", "sw_s21", "as_s21_am3",
                                                                                "as_s21_a7")]
-cases = [c for c in cases if os.path.exists(os.path.join(c[1], c[2] + "_response.csv"))]
+cases = [c for c in cases if done(c[1], c[2])]
 fig, ax = plt.subplots(1, len(cases) + 1, figsize=(3.6 * (len(cases) + 1), 3.6))
 for axi, (case, rd, job) in zip(ax, cases):
     a, b = load(os.path.join(ROOT, REF[case]), case), load(rd, job)
@@ -104,8 +110,7 @@ a = load(D, "sw_s40_default") if os.path.exists(os.path.join(D, "sw_s40_default_
 if a is not None:
     for (tag, lab), c in zip((("hencky", "Hencky"), ("frame_global", "frame 'global'"),
                               ("frame_midsurface", "frame 'midsurface'")), C[1:]):
-        p = os.path.join(D, f"sw_s40_{tag}_response.csv")
-        if not os.path.exists(p):
+        if not done(D, f"sw_s40_{tag}"):
             continue
         b = load(D, f"sw_s40_{tag}")
         dw = min(a["d_end"], b["d_end"])
