@@ -102,14 +102,15 @@ for axi, (case, rd, job) in zip(ax, cases):
     e = (np.interp(du, b["d"], b["P"]) - np.interp(du, a["d"], a["P"])) / a["P"].max()
     axi.plot(du, 1e2 * e, color=C[0], lw=0.8)
     axi.axhline(0, color="0.6", lw=0.8)
-    axi.set(xlabel=r"$\Delta$ (mm)", title=case, ylim=(-0.012, 0.012))
+    lim = 1.15e2 * np.abs(e).max()
+    axi.set(xlabel=r"$\Delta$ (mm)", title=case, ylim=(-lim, lim))
     axi.text(0.97, 0.04, "max %.1e, rms %.1e" % (np.abs(e).max(), np.sqrt(np.mean(np.interp(
         np.linspace(0, dw, 20000), du, e) ** 2))), transform=axi.transAxes, ha="right", fontsize=8, color="0.2")
 ax[0].set_ylabel(r"$(P - P_{ABAQUS}) / P_{peak}$ (%)")
 a = load(D, "sw_s40_default") if os.path.exists(os.path.join(D, "sw_s40_default_response.csv")) else None
 if a is not None:
-    for (tag, lab), c in zip((("hencky", "Hencky"), ("frame_global", "frame 'global'"),
-                              ("frame_midsurface", "frame 'midsurface'")), C[1:]):
+    for (tag, lab), c in zip((("hencky", "Hencky"),
+                              ("frame_global", "frame 'global' (= 'midsurface' to 2e-9 N)")), C[1:]):
         if not done(D, f"sw_s40_{tag}"):
             continue
         b = load(D, f"sw_s40_{tag}")
