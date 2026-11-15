@@ -39,7 +39,7 @@ st = m.deck.step['static']
 n_inc = a.n_inc or int(round(st['T'] / st['dtmax']))
 print('deck %s: n_q %d free %d colours %d law %s, setup %.1f s, %d increments'
       % (a.deck, m.n_q, len(m.free), m.n_colors, m.law_kind, t_setup, n_inc), flush=True)
-D = jnp.zeros((m.coh.n_seg, m.coh.n_q))
+D = m.frozen_args(m.zero_history(), 1.0)          # elastic law: history unused
 q = m.apply_bc(m.zero_q(), 0.0)
 rows, Us, Tn, Ts = [], [], [], []
 for k in range(1, n_inc + 1):
@@ -53,7 +53,7 @@ for k in range(1, n_inc + 1):
              converged=info['converged'], wall=wall, t_tangent=info['t_tangent'], t_solve=info['t_solve'])
     rows.append(o)
     Us.append(m.lift(q)[: 2 * m.n_nodes].reshape(-1, 2))
-    tn, ts = m.coh.tractions(jnp.asarray(Us[-1]), dict(Dv=D), m.K0)
+    tn, ts = m.coh.tractions(jnp.asarray(Us[-1]), m.zero_history(), m.K0)
     Tn.append(np.asarray(tn))
     Ts.append(np.asarray(ts))
     print('inc %d lam %.3f RF2 %.9g UR3 %.9g mouth %.9g/%.9g its %d conv %s wall %.1f s (tangent %.1f, solve %.1f)'

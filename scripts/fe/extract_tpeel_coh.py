@@ -18,8 +18,8 @@ def main(paths):
         out, header = open(path[:-4] + '_coh.csv', 'w'), False
         for k, fr in enumerate(step.frames):
             fo = fr.fieldOutputs
-            if 'S' not in fo.keys():
-                continue
+            if 'S' not in fo.keys() or 'E' not in fo.keys():
+                continue                     # frame 0 / adherend-only frames
             S, E = fo['S'], fo['E']
             if not header:
                 out.write(','.join(['frame', 'time', 'el', 'ip'] + ['S_' + c for c in S.componentLabels] +

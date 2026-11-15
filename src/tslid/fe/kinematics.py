@@ -46,8 +46,44 @@ def psi_svk(H, lam, mu):
     return _iso(E, lam, mu)
 
 
-def psi_hencky(H, lam, mu, order=10):
-    """Hencky (logarithmic-strain) plane-strain energy density (MPa).
+def psi_hencky(H, lam, mu):
+    """Hencky (logarithmic-strain) plane-strain energy density (MPa), closed form.  Step S3a.
+
+    psi = lam/2 tr(h)^2 + mu h:h, h = 1/2 ln(C) (in-plane 2x2 block; C33 = 1 so h33 = 0).
+    For the symmetric positive-definite 2x2 C with eigenvalues m +/- s,
+        ln C = a I + b (C - m I),  a = 1/2 ln det C,  b = atanh(s/m)/s = (1/m) f(z2),
+        z2 = (s/m)^2 = [((C11 - C22)/2)^2 + C12^2] / m^2,  f(z2) = atanh(sqrt z2)/sqrt z2,
+    and f is evaluated by its series 1 + z2/3 + z2^2/5 + ... for z2 < 1e-4 (double-where), so the
+    energy depends on C only through (det C, m, z2): smooth and NaN-free at H = 0 and at equal
+    eigenvalues, and valid for any strain (the series version below diverges once |C - I| ~ 1,
+    which the first Newton iterate after a prescribed jump can reach -- S3a).
+    """
+    Ht = jnp.swapaxes(H, -1, -2)
+    A = H + Ht + Ht @ H                                     # C - I (no cancellation)
+    c11, c22, c12 = 1.0 + A[..., 0, 0], 1.0 + A[..., 1, 1], A[..., 0, 1]
+    m = 0.5 * (c11 + c22)
+    p = (0.5 * (A[..., 0, 0] - A[..., 1, 1])) ** 2 + c12 ** 2
+    z2 = p / m ** 2
+    small = z2 < 1e-4
+    z2s = jnp.where(small, 0.5, z2)
+    z = jnp.sqrt(z2s)
+    f_big = jnp.arctanh(z) / z
+    zz = jnp.where(small, z2, 0.0)
+    f_sml = 1.0 + zz * (1.0 / 3 + zz * (1.0 / 5 + zz * (1.0 / 7 + zz * (1.0 / 9 + zz / 11))))
+    b = jnp.where(small, f_sml, f_big) / m
+    detC = c11 * c22 - c12 ** 2
+    a = 0.5 * jnp.log(detC)
+    # tr(ln C) = 2a; deviatoric part b (C - m I) has entries b*(A11-A22)/2, b*c12
+    d = 0.5 * (A[..., 0, 0] - A[..., 1, 1])
+    h11 = 0.5 * (a + b * d)
+    h22 = 0.5 * (a - b * d)
+    h12 = 0.5 * b * c12
+    tr = h11 + h22
+    return 0.5 * lam * tr ** 2 + mu * (h11 ** 2 + h22 ** 2 + 2.0 * h12 ** 2)
+
+
+def psi_hencky_series(H, lam, mu, order=10):
+    """Hencky (logarithmic-strain) plane-strain energy density (MPa), power-series ln C (S1).
 
     psi = lam/2 tr(h)^2 + mu h:h with h = ln(U) = 1/2 ln(C), C = F^T F.  Its Kirchhoff stress
     is linear in log strain, the closest hyperelastic counterpart of ABAQUS's hypoelastic NLGEOM
@@ -64,4 +100,4 @@ def psi_hencky(H, lam, mu, order=10):
     return _iso(0.5 * lnC, lam, mu)
 
 
-ENERGIES = {"linear": psi_linear, "svk": psi_svk, "hencky": psi_hencky}
+ENERGIES = {"linear": psi_linear, "svk": psi_svk, "hencky": psi_hencky, "hencky_series": psi_hencky_series}

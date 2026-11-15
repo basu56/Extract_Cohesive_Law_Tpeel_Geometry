@@ -51,11 +51,18 @@ class TPeelModel:
         quadrature, frame: CohesiveInterface options ("nodal" = COH2D4, "global" frame).
         coupling: "finite" (R(theta), NLGEOM = YES) or "linear" (u_s = u_RP + theta e3 x dX,
             what ABAQUS uses with NLGEOM = NO).
+        history: "monolithic" (S3b default: incremental potential at the frozen history of the
+            previous increment, one Newton solve per increment) or "staggered" (S2: stiffness
+            damage frozen, solve / update history / repeat).
+
+    The energy, residual and tangent take the frozen-history arguments ``h`` returned by
+    ``frozen_args(hist, dt)``: (dmax_n, Dv_n, a, b) for monolithic, (D_stiffness,) for staggered.
     """
 
     def __init__(self, deck, kinematics="svk", kind="Q4IM", quadrature="nodal", frame="global",
-                 coupling="finite"):
+                 coupling="finite", history="monolithic"):
         self.coupling = coupling
+        self.history = history
         self.deck = read_inp(deck) if isinstance(deck, str) else deck
         d = self.deck
         self.coords = d.coords
@@ -116,10 +123,33 @@ class TPeelModel:
         self._energy = jax.jit(self.energy_full)
 
     # ---------------------------------------------------------------- energies
-    def energy_full(self, U, Dstiff):
-        """Total energy (N*mm) of the full vector U with cohesive stiffness damage Dstiff frozen."""
+    def energy_full(self, U, *h):
+        """Total energy (N*mm) of the full vector U at frozen history h (see frozen_args)."""
         u = U[: 2 * self.n_nodes].reshape(-1, 2)
-        return self.bulk.energy(U) + self.coh.energy(u, Dstiff, self.K0)
+        if self.history == "monolithic":
+            dmax_n, Dv_n, a, b = h
+            coh = self.coh.energy_incremental(u, dmax_n, Dv_n, self.law, a, b, self.K0)
+        else:
+            coh = self.coh.energy(u, h[0], self.K0)
+        return self.bulk.energy(U) + coh
+
+    def zero_history(self):
+        return self.coh.zero_history()
+
+    def frozen_args(self, hist, dt):
+        """Arguments h of energy/residual/tangent for an increment of length dt from history hist."""
+        if self.history == "monolithic":
+            mu = self.viscosity
+            a, b = (0.0, 1.0) if mu == 0.0 else (mu / (mu + dt), dt / (mu + dt))
+            return (hist["dmax"], hist["Dv"], jnp.asarray(a), jnp.asarray(b))
+        return (hist["Dv"],)
+
+    def update_history(self, q, hist, dt):
+        """History after the converged increment (S2 update_damage; no-op for the elastic law)."""
+        if self.law is None:
+            return hist
+        u = jnp.asarray(self.lift(q)[: 2 * self.n_nodes].reshape(-1, 2))
+        return self.coh.update_history(u, hist, self.law, self.viscosity, dt)
 
     def _bc_dofs(self, bcs):
         out = []
@@ -163,16 +193,16 @@ class TPeelModel:
         return sps.csr_matrix((np.concatenate(vals), (np.concatenate(rows), np.concatenate(cols))),
                               shape=(self.n_full, self.n_q))
 
-    def residual(self, q, Dstiff):
+    def residual(self, q, h):
         """Reduced residual r_q = J^T dE/dU (internal force; equals the reaction at fixed dofs)."""
         U = self.lift(q)
-        rU = np.asarray(self._grad(jnp.asarray(U), Dstiff))
+        rU = np.asarray(self._grad(jnp.asarray(U), *h))
         return self.lift_jacobian(q).T @ rU
 
-    def tangent(self, q, Dstiff, return_residual=False):
+    def tangent(self, q, h, return_residual=False):
         U = jnp.asarray(self.lift(q))
-        KU = self._jac(U, Dstiff).to_csr()
-        rU = np.asarray(self._grad(U, Dstiff))
+        KU = self._jac(U, *h).to_csr()
+        rU = np.asarray(self._grad(U, *h))
         J = self.lift_jacobian(q)
         Kq = (J.T @ KU @ J).tocsr()
         G = np.zeros(self.n_q)
@@ -183,8 +213,8 @@ class TPeelModel:
         Kq = Kq + sps.diags(G)
         return (Kq.tocsr(), J.T @ rU) if return_residual else Kq.tocsr()
 
-    def energy(self, q, Dstiff):
-        return float(self._energy(jnp.asarray(self.lift(q)), Dstiff))
+    def energy(self, q, h):
+        return float(self._energy(jnp.asarray(self.lift(q)), *h))
 
     # ---------------------------------------------------------------- helpers
     def zero_q(self):
@@ -199,9 +229,9 @@ class TPeelModel:
             q[i] = load_factor * v
         return q
 
-    def outputs(self, q, Dstiff, r=None):
+    def outputs(self, q, h, r=None):
         """History quantities named as in the ABAQUS deck output (RP1/RP2 U, UR3, RF; mouth U2)."""
-        r = self.residual(q, Dstiff) if r is None else r
+        r = self.residual(q, h) if r is None else r
         U = self.lift(q)
         o = {k: float(U[i]) if i < self.n_full else float(q[i]) for k, i in self.out.items()}
         o["rp1_rf1"], o["rp1_rf2"] = float(r[self.out["rp1_u1"]]), float(r[self.out["rp1_u2"]])
@@ -211,7 +241,7 @@ class TPeelModel:
         return o
 
 
-def newton(model, q, Dstiff, rtol=1e-10, atol=1e-10, utol=1e-13, max_iter=25, linsolve=None, log=None):
+def newton(model, q, h, rtol=1e-10, atol=1e-10, utol=1e-13, max_iter=25, linsolve=None, log=None):
     """Plain Newton on the free reduced dofs (fixed dofs of q hold the prescribed values).
 
     Converged when ||r_free||_inf <= max(atol, rtol * f_ref), f_ref = max(reaction ||r_fixed||_inf,
@@ -227,7 +257,7 @@ def newton(model, q, Dstiff, rtol=1e-10, atol=1e-10, utol=1e-13, max_iter=25, li
     t_tan = t_sol = 0.0
     for it in range(max_iter + 1):
         t0 = time.perf_counter()
-        K, r = model.tangent(q, Dstiff, return_residual=True)
+        K, r = model.tangent(q, h, return_residual=True)
         t_tan += time.perf_counter() - t0
         rf = r[free]
         r0 = np.abs(rf).max() if r0 is None else r0
@@ -245,7 +275,7 @@ def newton(model, q, Dstiff, rtol=1e-10, atol=1e-10, utol=1e-13, max_iter=25, li
         t_sol += time.perf_counter() - t0
         q[free] -= dq
         if it > 0 and np.abs(dq).max() <= utol * max(np.abs(q).max(), 1e-300):
-            hist.append(float(np.abs(model.residual(q, Dstiff)[free]).max()))
+            hist.append(float(np.abs(model.residual(q, h)[free]).max()))
             ok = True
             break
     q[model.slave_dofs] = model.lift(q)[model.slave_dofs]       # store dependent values for output
