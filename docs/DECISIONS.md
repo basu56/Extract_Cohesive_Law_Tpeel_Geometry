@@ -306,3 +306,21 @@ Rationale:
 CPE4I internals are not investigated now. S3d adds one item: report where along the bond the
 2.6–3.0e-4 cohesive-traction difference sits (crack tip vs bond-end corner).
 Status: **agreed**.
+
+## 2026-11-15 — D24: S3c solver configuration and Newton tolerance (proposed by the S3c study)
+Proposal: the default `tslid.fe` T-peel path from S3d on is:
+- element-local assembly (`ElementSystem`);
+- static condensation of the incompatible modes;
+- MKL PARDISO symmetric indefinite with the symbolic factorization reused (`pardiso_sym`);
+- energy Newton with Armijo / residual acceptance and the divergence check after iteration 4;
+- **rtol = 1e-6** on ‖r_free‖∞ relative to the reaction (floor 1 N).
+`pypardiso` is added to the `fe` extra (x86_64).
+Evidence [D] (SOLVER_LOG S3c):
+- Same increments as the rtol = 1e-10 run on the coarse deck: rtol = 1e-6 changes P by
+  ≤ 2.3e-6 P_peak in the compare_ld window (criterion 1e-5); 1e-5 changes it by 2.3e-5.
+- Tangents equal the jacfwd ones to ≤ 6.3e-14. The condensed step solves the full system to
+  backward error 5e-16. PARDISO backward error ≤ 6e-14, 0 perturbed pivots in all runs.
+- Production `sw_s40` (rtol 1e-10): 754 s on 1 thread vs ABAQUS 2321 s. P_peak 5.7e-6;
+  whole-curve max 8.1e-5 P_peak in the window; E4–E6 equal to ABAQUS's.
+Not changed: increments as ABAQUS (D16/D22); a looser tolerance does not reduce the increments.
+Status: **proposed**, to be confirmed at the S3c review.
