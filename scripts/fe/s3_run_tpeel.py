@@ -44,6 +44,7 @@ ap.add_argument("--newton", default="residual", choices=["residual", "energy"],
 ap.add_argument("--assembly", default="jacfwd", choices=["jacfwd", "element"])
 ap.add_argument("--condense", action="store_true", help="condense the incompatible modes (element assembly)")
 ap.add_argument("--linsolve", default="superlu", choices=sorted(SOLVERS))
+ap.add_argument("--diverge-after", type=int, default=0, help="newton_energy divergence check (0 = off)")
 ap.add_argument("--cprofile", action="store_true", help="also write <job>_<tag>_cprofile.txt (top 40 by cumtime)")
 a = ap.parse_args()
 job = os.path.basename(a.deck)[:-4]
@@ -86,10 +87,11 @@ def rec(m, t, q, hist, h, r):
                 Dmax=float(np.max(np.asarray(hist["D"]))), n_failed=int(np.sum(np.asarray(hist["D"]) >= 1.0)))
 
 
-opt = SolverOptions(rtol=a.rtol, linsolve=solver)
+opt = SolverOptions(rtol=a.rtol, linsolve=solver, diverge_after=a.diverge_after)
 path = os.path.join(a.outdir, f"{job}_{tag}_jax.csv")
 jpath = os.path.join(a.outdir, f"{job}_{tag}_jax.json")
-LOGF = ("dt", "newton", "passes", "cutbacks", "ls", "wall", "t_tangent", "t_solve", "t_history", "t_ls")
+LOGF = ("dt", "newton", "passes", "cutbacks", "ls", "wall", "t_tangent", "t_solve", "t_history", "t_ls",
+        "failed_iters", "failed_wall", "diverged")
 state = dict(fh=None, w=None, rows=[], logs=[], t_io=0.0, t_start=time.perf_counter())
 
 
@@ -103,6 +105,10 @@ def summary(complete, res=None):
              newton_total=int(sum(l.iterations for l in L)), newton_max=int(max((l.iterations for l in L), default=0)),
              passes_total=int(sum(l.passes for l in L)), passes_max=int(max((l.passes for l in L), default=0)),
              ls_total=int(sum(l.ls_steps for l in L)),
+             failed_iters=int(sum(l.failed_iters for l in L)), failed_wall=float(sum(l.failed_wall for l in L)),
+             diverged=int(sum(l.diverged for l in L)),
+             iterations_all=int(sum(l.iterations + l.failed_iters for l in L)),
+             diverge_after=a.diverge_after,
              wall_run=res.wall if res else time.perf_counter() - state["t_start"], wall_setup=t_setup,
              wall_first_call=t_jit,
              t_tangent=float(sum(l.t_tangent for l in L)), t_solve=float(sum(l.t_solve for l in L)),
@@ -129,7 +135,8 @@ def on_inc(row, l):
         row.update({k: 0 for k in LOGF})
     else:
         row.update(dt=l.dt, newton=l.iterations, passes=l.passes, cutbacks=l.cutbacks, ls=l.ls_steps, wall=l.wall,
-                   t_tangent=l.t_tangent, t_solve=l.t_solve, t_history=l.t_history, t_ls=l.t_ls)
+                   t_tangent=l.t_tangent, t_solve=l.t_solve, t_history=l.t_history, t_ls=l.t_ls,
+                   failed_iters=l.failed_iters, failed_wall=l.failed_wall, diverged=l.diverged)
         state["logs"].append(l)
     state["rows"].append(row)
     if state["w"] is None:

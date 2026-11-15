@@ -47,6 +47,9 @@ class SolverOptions:
     stagger_tol: float = 1e-12
     max_stagger: int = 100
     linsolve: object = None       # callable (A_csc, b) -> x; default SciPy spsolve (SuperLU)
+    diverge_after: int = 0        # S3c: >0 -> abandon the attempt (cut back) once ||r_free||_inf has
+                                  # increased in two consecutive iterations after this iteration
+                                  # (newton_energy only; 0 = off, the S3b behaviour)
 
 
 @dataclass
@@ -62,6 +65,9 @@ class IncrementLog:
     t_solve: float
     t_history: float
     t_ls: float = 0.0             # residual evaluations of rejected/accepted line-search trials
+    failed_iters: int = 0         # Newton iterations of the abandoned attempts before this increment
+    failed_wall: float = 0.0      # wall time of those attempts (s)
+    diverged: int = 0             # how many of them stopped on the divergence check
 
 
 @dataclass
@@ -153,7 +159,7 @@ def newton_energy(model, q, h, opt, log=None):
     free, fixed = model.free, model.fixed
     solve = opt.linsolve or default_solve
     q = np.array(q, dtype=float)
-    res, ok, n_ls = [], False, 0
+    res, ok, n_ls, diverged = [], False, 0, False
     t_tan = t_sol = t_ls = 0.0
     t0 = time.perf_counter()
     E, r = model.value_and_grad(q, h)
@@ -168,6 +174,9 @@ def newton_energy(model, q, h, opt, log=None):
             ok = True
             break
         if it == opt.max_iter or not np.isfinite(res[-1]):
+            break
+        if opt.diverge_after and it > opt.diverge_after and res[-1] > res[-2] > res[-3]:
+            diverged = True
             break
         t0, s0 = time.perf_counter(), model.timers["solve"]
         dq = model.direction(q, h, r, solve)
@@ -199,7 +208,7 @@ def newton_energy(model, q, h, opt, log=None):
             break
     q[model.slave_dofs] = model.lift(q)[model.slave_dofs]
     return q, dict(iterations=it, residuals=res, converged=ok, ls_steps=n_ls, t_tangent=t_tan,
-                   t_solve=t_sol, t_ls=t_ls, r=r, E=E)
+                   t_solve=t_sol, t_ls=t_ls, r=r, E=E, diverged=diverged)
 
 
 def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_increments=10 ** 6,
@@ -221,7 +230,7 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
         if on_increment:
             on_increment(out.records[-1], None)
     t, dt, q_prev, dt_prev, easy, n_inc = 0.0, dt0, None, None, 0, 0
-    cut_here = 0
+    cut_here, f_its, f_wall, f_div = 0, 0, 0.0, 0
     while t < T * (1 - 1e-12) and n_inc < max_increments:
         dt = min(dt, T - t)
         if T - t - dt < 1e-9 * T:
@@ -266,6 +275,9 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
         if not ok:
             out.cutbacks += 1
             cut_here += 1
+            f_its += its
+            f_wall += time.perf_counter() - tw
+            f_div += int(info.get("diverged", False))
             if say:
                 say("  cutback at t=%.6g: dt %.3g -> %.3g" % (t, dt, dt * opt.cut))
             dt *= opt.cut
@@ -278,8 +290,8 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
         t += dt
         n_inc += 1
         out.log.append(IncrementLog(t, dt, its, passes, cut_here, n_ls, time.perf_counter() - tw,
-                                    t_tan, t_sol, t_hist, t_ls))
-        cut_here = 0
+                                    t_tan, t_sol, t_hist, t_ls, f_its, f_wall, f_div))
+        cut_here, f_its, f_wall, f_div = 0, 0, 0.0, 0
         if record:
             out.records.append(record(model, t, q, hist, h, info["r"]))
             if on_increment:
