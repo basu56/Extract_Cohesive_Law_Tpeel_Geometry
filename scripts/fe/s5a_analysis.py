@@ -45,6 +45,13 @@ def js(path):
     return json.load(open(path)) if os.path.exists(path) else None
 
 
+def prefix(ta, tb):
+    """Number of leading increments with identical end times."""
+    n = min(len(ta), len(tb))
+    k = np.nonzero(np.asarray(ta[:n]) != np.asarray(tb[:n]))[0]
+    return int(k[0]) if len(k) else n
+
+
 def write(rows, name):
     keys = []
     for r in rows:
@@ -106,19 +113,27 @@ if "b1" in S:
                         bitwise_dP=bool(np.array_equal(b1["dP"], b2["dP"])),
                         max_dP_rel=float(np.abs(b1["P"] - b2["P"]).max() / np.abs(b1["P"]).max()),
                         max_dS_rel=float(np.abs(b1["dP"] - b2["dP"]).max() / np.abs(b1["dP"]).max())))
-    if "bslu" in S and len(S["bslu"]["P"]) == len(b1["P"]):
+    nwin = int(win.sum())                                      # window = first nwin increments
+    if "bslu" in S:
         c = S["bslu"]
-        det.append(dict(pair="b1 vs bslu (PARDISO vs SuperLU)", n=len(c["P"]),
-                        bitwise_time=bool(np.array_equal(b1["time"], c["time"])),
-                        max_dP_rel=float(np.abs(b1["P"] - c["P"]).max() / np.abs(b1["P"]).max()),
-                        **{f"dS_rel_{nm}": float(np.linalg.norm((b1["dP"] - c["dP"])[win, j]) /
-                                                 np.linalg.norm(b1["dP"][win, j])) for j, nm in enumerate(NAMES)}))
+        k = prefix(b1["time"], c["time"])
+        w = slice(0, min(k, nwin))
+        det.append(dict(pair="b1 vs bslu (PARDISO vs SuperLU)", n=len(c["P"]), common_prefix=k,
+                        prefix_covers_window=k >= nwin, delta_first_difference=float(b1["delta"][k]) if k < len(b1["P"]) else None,
+                        max_dP_rel=float(np.abs(b1["P"][w] - c["P"][w]).max() / np.abs(b1["P"]).max()),
+                        **{f"dS_rel_{nm}": float(np.linalg.norm((b1["dP"] - c["dP"][:len(b1["P"])] if len(c["P"]) >= len(b1["P"])
+                                                                else b1["dP"][:len(c["P"])] - c["dP"])[w, j]) /
+                                                 np.linalg.norm(b1["dP"][w, j])) for j, nm in enumerate(NAMES)}))
     r0 = os.path.join(CO, "c_s40_r0_jax.csv")
     if os.path.exists(r0):
         r = rd(r0)
-        same = len(r["P"]) - 1 == len(b1["P"])
-        det.append(dict(pair="b1 vs r0 (replay of b1's schedule)", n=len(r["P"]) - 1, same_increments=same,
-                        max_dP_rel=float(np.abs(r["P"][1:] - b1["P"]).max() / np.abs(b1["P"]).max()) if same else None))
+        k = prefix(b1["time"], r["time"][1:])
+        det.append(dict(pair="b1 vs r0 (replay of b1's schedule)", n=len(r["P"]) - 1, common_prefix=k,
+                        prefix_covers_window=k >= nwin,
+                        delta_first_difference=float(b1["delta"][k]) if k < len(b1["P"]) else None,
+                        bitwise_P_window=bool(np.array_equal(r["P"][1:nwin + 1], b1["P"][:nwin])),
+                        max_dP_rel=float(np.abs(r["P"][1:min(k, nwin) + 1] - b1["P"][:min(k, nwin)]).max()
+                                         / np.abs(b1["P"]).max())))
     for t, lab in (("t6r", "rtol 1e-6, b1 schedule"), ("t6", "rtol 1e-6, own schedule")):
         if t not in S:
             continue
@@ -132,6 +147,8 @@ if "b1" in S:
                 g = b1["delta"][win]
                 d = np.interp(g, c["delta"], c["dP"][:, j]) - b1["dP"][win, j]
                 row[f"rel_{nm}"] = float(np.linalg.norm(d) / np.linalg.norm(b1["dP"][win, j]))
+                pre = b1["delta"][win] <= b1["delta"][int(np.argmax(b1["P"]))]
+                row[f"rel_prepeak_{nm}"] = float(np.linalg.norm(d[pre]) / np.linalg.norm(b1["dP"][win, j][pre]))
         row["P_rel"] = float(np.abs(np.interp(b1["delta"][win], c["delta"], c["P"]) - b1["P"][win]).max()
                              / np.abs(b1["P"]).max())
         tol.append(row)
@@ -152,19 +169,23 @@ if "b1" in S:
             if not (os.path.exists(fp) and os.path.exists(fm)):
                 continue
             p, m = rd(fp), rd(fm)
-            ok = len(p["P"]) - 1 == len(b1["P"]) and len(m["P"]) - 1 == len(b1["P"])
-            row = dict(param=nm, h=float(h), replay_same_increments=ok)
+            nwin = int(win.sum())
+            k = min(prefix(b1["time"], p["time"][1:]), prefix(b1["time"], m["time"][1:]))
+            ok = k >= nwin                                      # replay identical through the window
+            row = dict(param=nm, h=float(h), replay_same_increments_in_window=ok, common_prefix=k)
             if ok:
-                fd = (p["P"][1:] - m["P"][1:]) / (2 * float(h))
+                w = win.copy()
+                fd = np.full(len(b1["P"]), np.nan)
+                fd[:nwin] = (p["P"][1:nwin + 1] - m["P"][1:nwin + 1]) / (2 * float(h))
                 e = b1["dP"][:, j] - fd
-                row.update(curve_rel=float(np.linalg.norm(e[win]) / np.linalg.norm(fd[win])),
-                           curve_rel_no_kink=float(np.linalg.norm(e[win & ~kink]) / np.linalg.norm(fd[win & ~kink])),
-                           point_max_rel=float(np.abs(e[win]).max() / np.abs(fd[win]).max()),
-                           delta_at_point_max=float(b1["delta"][win][np.argmax(np.abs(e[win]))]),
-                           kink_increments_in_window=int((kink & win).sum()))
+                row.update(curve_rel=float(np.linalg.norm(e[w]) / np.linalg.norm(fd[w])),
+                           curve_rel_no_kink=float(np.linalg.norm(e[w & ~kink]) / np.linalg.norm(fd[w & ~kink])),
+                           point_max_rel=float(np.abs(e[w]).max() / np.abs(fd[w]).max()),
+                           delta_at_point_max=float(b1["delta"][w][np.argmax(np.abs(e[w]))]),
+                           kink_increments_in_window=int((kink & w).sum()))
                 fdcurves[(nm, h)] = fd
             else:
-                row["increments_p_m"] = f"{len(p['P']) - 1}/{len(m['P']) - 1} vs {len(b1['P'])}"
+                row["delta_first_difference"] = float(b1["delta"][k])
             step.append(row)
 if step:
     write(step, "s5a_stepstudy.csv")
