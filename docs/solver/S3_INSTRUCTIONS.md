@@ -162,6 +162,22 @@ end to end, then:
 3. **Gate (coarse).** Energy balance E4 and dissipation E5/E6 are computed exactly as
    `src/tslid/analysis/energy_checks.py` does for ABAQUS, and pass.
 
+**Update 2026-11-15 (user, after the S3a/S3b review; D23).** S3c runs in this order, logging
+the gain of each item separately in SOLVER_LOG:
+1. Write records as the run goes (a timed-out run still leaves data), then profile.
+2. Reduce line-search residual evaluations and per-increment Python overhead (JIT the Newton
+   step, energy-based Armijo acceptance, try the full step first). This is about 61 % of the
+   coarse wall time.
+3. Benchmark element-local Hessian assembly (batched per-element Hessians, then scatter) against
+   the 34-colour `sparse.jacfwd`, with the same matrix to 1e-12.
+4. Condense the incompatible modes (item 2.1 above).
+5. Benchmark the linear solvers, with symbolic-factorization reuse (item 2.2).
+6. Tolerance study (item 2.3) and the coarse energy gate (item 3).
+At the end of S3c, project the production wall time from the measurements and stop for review.
+If it is more than about 2× ABAQUS, decide together with the user rather than optimise further.
+S3d adds one item: report where along the bond the S3a cohesive-traction difference
+(2.6–3.0e-4) sits, crack tip vs bond-end corner.
+
 ### S3d — Production reference case vs ABAQUS (`sw_s40`)
 
 1. **Run on Negishi** (`sbatch`, CPU partition), on the production mesh imported from the

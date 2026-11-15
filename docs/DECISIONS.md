@@ -292,3 +292,17 @@ The ABAQUS manual sections cited in `ELEMENTS.md` and `INTERFACE.md` stay marked
 whether Purdue's SIMULIA licence gives a 3DS account. The probe runs are the evidence. In
 manuscripts, cite only sections that have been checked.
 Status: **agreed**.
+
+## 2026-11-15 — D23: S3a elastic gate under NLGEOM revised to ≤ 5e-5
+Decision (user): under NLGEOM, the S3a elastic gate on RF2 is **≤ 5e-5 relative** at T-peel load
+levels (≤ 1.5 × P_peak), not 1e-5. The 2–3e-5 gap is accepted as the Q4IM-vs-CPE4I NLGEOM floor
+(the same floor as S1, D21). The 1e-5 gate still applies with NLGEOM = NO, where the agreement
+is ≤ 3.3e-8.
+Rationale:
+- [D] ABAQUS's own default Newton tolerance moves RF2 by 1.05e-4 (S3a, default vs tight
+  controls).
+- [D] SVK and Hencky give gaps of the same size and sign, so the bulk energy is not the cause.
+- [D] The floor is 0.002–0.003 %. The S3d whole-curve gate is 0.5 %.
+CPE4I internals are not investigated now. S3d adds one item: report where along the bond the
+2.6–3.0e-4 cohesive-traction difference sits (crack tip vs bond-end corner).
+Status: **agreed**.

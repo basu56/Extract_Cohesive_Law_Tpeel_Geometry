@@ -61,6 +61,7 @@ class IncrementLog:
     t_tangent: float
     t_solve: float
     t_history: float
+    t_ls: float = 0.0             # residual evaluations of rejected/accepted line-search trials
 
 
 @dataclass
@@ -79,7 +80,7 @@ def newton_ls(model, q, h, opt, log=None):
     solve = opt.linsolve or (lambda A, b: spla.spsolve(A, b))
     q = np.array(q, dtype=float)
     res, ok, n_ls = [], False, 0
-    t_tan = t_sol = 0.0
+    t_tan = t_sol = t_ls = 0.0
     t0 = time.perf_counter()
     K, r = model.tangent(q, h, return_residual=True)
     t_tan += time.perf_counter() - t0
@@ -111,11 +112,12 @@ def newton_ls(model, q, h, opt, log=None):
                 break
             rt = model.residual(qt, h)
             nt = np.linalg.norm(rt[free])
+            t1 = time.perf_counter()
+            t_ls += t1 - t0
             if nt <= (1.0 - opt.ls_c * step) * n0 or k == opt.ls_max:
                 K, r = model.tangent(qt, h, return_residual=True)
-                t_tan += time.perf_counter() - t0
+                t_tan += time.perf_counter() - t1
                 break
-            t_tan += time.perf_counter() - t0
             step *= 0.5
             n_ls += 1
         q = qt
@@ -125,12 +127,16 @@ def newton_ls(model, q, h, opt, log=None):
             break
     q[model.slave_dofs] = model.lift(q)[model.slave_dofs]
     return q, dict(iterations=it, residuals=res, converged=ok, ls_steps=n_ls, t_tangent=t_tan,
-                   t_solve=t_sol, r=r)
+                   t_solve=t_sol, t_ls=t_ls, r=r)
 
 
-def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_increments=10 ** 6):
+def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_increments=10 ** 6,
+        on_increment=None, newton=None):
     """Integrate the step 0 -> T.  ``record(model, t, q, hist, h_used, r)`` returns a dict stored per
-    converged increment (t = 0 included).  Returns RunResult."""
+    converged increment (t = 0 included).  ``on_increment(row, inc_log)`` is called right after each
+    record (inc_log None for t = 0), so a driver can write results as the run goes (S3c).
+    ``newton(model, q, h, opt, log)`` replaces newton_ls (same return contract).  Returns RunResult."""
+    newton = newton or newton_ls
     opt = opt or SolverOptions()
     out = RunResult()
     say = print if verbose else None
@@ -140,6 +146,8 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
     h0 = model.frozen_args(hist, dt0)
     if record:
         out.records.append(record(model, 0.0, q, hist, h0, model.residual(q, h0)))
+        if on_increment:
+            on_increment(out.records[-1], None)
     t, dt, q_prev, dt_prev, easy, n_inc = 0.0, dt0, None, None, 0, 0
     cut_here = 0
     while t < T * (1 - 1e-12) and n_inc < max_increments:
@@ -151,12 +159,13 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
         if opt.extrapolate and q_prev is not None:
             qt[model.free] += (dt / dt_prev) * (q - q_prev)[model.free]
         qt = model.apply_bc(qt, (t + dt) / T)
-        passes, its, n_ls, t_tan, t_sol = 0, 0, 0, 0.0, 0.0
+        passes, its, n_ls, t_tan, t_sol, t_ls = 0, 0, 0, 0.0, 0.0, 0.0
         if model.history == "monolithic":
             h = model.frozen_args(hist, dt)
-            qn, info = newton_ls(model, qt, h, opt, log=say)
+            qn, info = newton(model, qt, h, opt, log=say)
             ok, passes = info["converged"], 1
             its, n_ls, t_tan, t_sol = info["iterations"], info["ls_steps"], info["t_tangent"], info["t_solve"]
+            t_ls = info.get("t_ls", 0.0)
             t0 = time.perf_counter()
             new = model.update_history(qn, hist, dt) if ok else None
             t_hist = time.perf_counter() - t0
@@ -165,8 +174,9 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
             for passes in range(1, opt.max_stagger + 1):
                 trial = model.update_history(qn, hist, dt)
                 h = model.frozen_args(trial, dt)
-                qn, info = newton_ls(model, qn, h, opt, log=say)
+                qn, info = newton(model, qn, h, opt, log=say)
                 its += info["iterations"]
+                t_ls += info.get("t_ls", 0.0)
                 n_ls += info["ls_steps"]
                 t_tan += info["t_tangent"]
                 t_sol += info["t_solve"]
@@ -196,10 +206,12 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
         t += dt
         n_inc += 1
         out.log.append(IncrementLog(t, dt, its, passes, cut_here, n_ls, time.perf_counter() - tw,
-                                    t_tan, t_sol, t_hist))
+                                    t_tan, t_sol, t_hist, t_ls))
         cut_here = 0
         if record:
             out.records.append(record(model, t, q, hist, h, info["r"]))
+            if on_increment:
+                on_increment(out.records[-1], out.log[-1])
         if verbose:
             print("inc %d t=%.6g dt=%.4g its=%d passes=%d ls=%d" % (n_inc, t, dt, its, passes, n_ls), flush=True)
         easy = easy + 1 if its <= opt.easy_iters else 0

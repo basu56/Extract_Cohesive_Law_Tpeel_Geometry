@@ -18,6 +18,9 @@ Derivatives by the chain rule, with the AD tangent K of the full energy on the p
 J = dU/dq (identity on independent dofs; slave rows: 1 on the RP translation, R'(theta) dX on theta)
 and G the theta-theta term sum_s r_U,s . R''(theta) dX = -sum_s r_U,s . R(theta) dX.
 """
+import time
+from collections import defaultdict
+
 import numpy as np
 import scipy.sparse as sps
 import jax
@@ -127,6 +130,19 @@ class TPeelModel:
         self._grad = jax.jit(grad)
         self._jac = jax.jit(sparse_jacfwd(grad, self.colored))
         self._energy = jax.jit(self.energy_full)
+        self.timers = defaultdict(float)        # cumulative wall time per phase (s), see _tick
+        self.counts = defaultdict(int)
+
+    def _tick(self, key, t0):
+        """Add the time since t0 to timers[key]; return now (S3c profiling)."""
+        t = time.perf_counter()
+        self.timers[key] += t - t0
+        self.counts[key] += 1
+        return t
+
+    def jit_cache_sizes(self):
+        """Number of compiled variants of each jitted function (1 each = no recompilation)."""
+        return {k: f._cache_size() for k, f in (("grad", self._grad), ("jac", self._jac), ("energy", self._energy))}
 
     # ---------------------------------------------------------------- energies
     def energy_full(self, U, *h):
@@ -201,14 +217,26 @@ class TPeelModel:
 
     def residual(self, q, h):
         """Reduced residual r_q = J^T dE/dU (internal force; equals the reaction at fixed dofs)."""
+        t0 = time.perf_counter()
         U = self.lift(q)
+        t0 = self._tick("lift", t0)
         rU = np.asarray(self._grad(jnp.asarray(U), *h))
-        return self.lift_jacobian(q).T @ rU
+        t0 = self._tick("grad", t0)
+        r = self.lift_jacobian(q).T @ rU
+        self._tick("reduce_r", t0)
+        return r
 
     def tangent(self, q, h, return_residual=False):
+        t0 = time.perf_counter()
         U = jnp.asarray(self.lift(q))
-        KU = self._jac(U, *h).to_csr()
+        t0 = self._tick("lift", t0)
+        KU = self._jac(U, *h)
+        jax.block_until_ready(KU.data)
+        t0 = self._tick("jac", t0)
+        KU = KU.to_csr()
+        t0 = self._tick("to_csr", t0)
         rU = np.asarray(self._grad(U, *h))
+        t0 = self._tick("grad", t0)
         J = self.lift_jacobian(q)
         Kq = (J.T @ KU @ J).tocsr()
         G = np.zeros(self.n_q)
@@ -217,6 +245,7 @@ class TPeelModel:
             rs = rU[(2 * c["slaves"][:, None] + np.arange(2))]
             G[c["theta"]] = -np.sum(rs * Rd)
         Kq = Kq + sps.diags(G)
+        self._tick("reduce_K", t0)
         return (Kq.tocsr(), J.T @ rU) if return_residual else Kq.tocsr()
 
     def energy(self, q, h):
