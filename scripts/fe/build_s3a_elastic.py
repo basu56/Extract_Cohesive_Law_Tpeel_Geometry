@@ -30,13 +30,16 @@ def main():
     ap.add_argument('outdir')
     ap.add_argument('--n-inc', type=int, default=4)
     ap.add_argument('--delta', type=float, default=1.6)
+    ap.add_argument('--nlgeom', default='YES')
+    ap.add_argument('--name', default='s3a_el', help='job prefix: writes <name>_default / <name>_tight')
     a = ap.parse_args()
     params = json.load(open(a.ref_json))['params']
-    o = B.parse_args(['--job', 's3a_el_default', '--outdir', a.outdir, '--law', 'elastic',
+    o = B.parse_args(['--job', a.name + '_default', '--outdir', a.outdir, '--law', 'elastic',
                       '--n-inc', str(a.n_inc), '--delta', str(a.delta)])
     for k, v in params.items():
         if k not in SKIP and hasattr(o, k):
             setattr(o, k, v)
+    o.nlgeom = a.nlgeom
     nodes, els, sets, rps, law, geo = B.build(o)
     path, meta = B.write_inp(o, nodes, els, sets, rps, law, geo)
     print('wrote', path, geo['n_nodes'], 'nodes', geo['n_elems'], 'elements')
@@ -44,13 +47,13 @@ def main():
     i = txt.index('*Static\n')
     j = txt.index('\n', i + len('*Static\n')) + 1
     tight = txt[:j] + '*Controls, parameters=field, field=global\n1e-9, 1e-9\n' + txt[j:]
-    tight = tight.replace('T-peel s3a_el_default', 'T-peel s3a_el_tight')
-    with open(os.path.join(a.outdir, 's3a_el_tight.inp'), 'w') as f:
+    tight = tight.replace('T-peel %s_default' % a.name, 'T-peel %s_tight' % a.name)
+    with open(os.path.join(a.outdir, a.name + '_tight.inp'), 'w') as f:
         f.write(tight)
-    meta['params']['job'] = 's3a_el_tight'
-    with open(os.path.join(a.outdir, 's3a_el_tight.json'), 'w') as f:
+    meta['params']['job'] = a.name + '_tight'
+    with open(os.path.join(a.outdir, a.name + '_tight.json'), 'w') as f:
         json.dump(meta, f, indent=2, sort_keys=True)
-    print('wrote', os.path.join(a.outdir, 's3a_el_tight.inp'))
+    print('wrote', os.path.join(a.outdir, a.name + '_tight.inp'))
 
 
 if __name__ == '__main__':

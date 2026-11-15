@@ -90,3 +90,29 @@ def damage(dmax, K0, sigc, Gc, alpha):
     x = (d_safe - d0) / (df - d0)
     D_soft = 1.0 - sigc * s_shape(x, alpha) / (K0 * d_safe)
     return jnp.where(dmax <= d0, 0.0, jnp.where(dmax >= df, 1.0, D_soft))
+
+
+def s_integral(x, alpha):
+    """S(x; alpha) = int_0^x s(xi; alpha) dxi for x clipped to [0, 1]  (S(1) = g(alpha)).  Step S3b.
+
+    S = g(alpha) - I(1 - x),  I(y) = int_0^y expm1(alpha eta)/expm1(alpha) d eta
+      = (expm1(alpha y) - alpha y) / (alpha expm1(alpha))                      (|alpha| >= 0.5)
+      = y^2 [sum_{j=0}^{m-2} (alpha y)^j/(j+2)!] / [sum_{k=1}^{m} alpha^(k-1)/k!]   (|alpha| < 0.5)
+    dS/dx = s(x; alpha) exactly under AD (the derivative of each branch is the s formula of that
+    branch), so the traction from the incremental potential is the law itself.
+    """
+    alpha = jnp.asarray(alpha, dtype=float)
+    y = 1.0 - jnp.clip(x, 0.0, 1.0)
+    small = jnp.abs(alpha) < ALPHA_SERIES
+    a_big = jnp.where(small, 1.0, alpha)
+    a_sml = jnp.where(small, alpha, 0.0)
+    I_big = (jnp.expm1(a_big * y) - a_big * y) / (a_big * jnp.expm1(a_big))
+    I_sml = y * y * _series(a_sml * y, [1.0 / _FACT[k] for k in range(2, _M + 1)]) / _den(a_sml)
+    return g_alpha(alpha) - jnp.where(small, I_sml, I_big)
+
+
+def envelope_integral(d, K0, sigc, Gc, alpha):
+    """F(d) = int_{d0}^{d} sigma(s) ds for d >= d0 (N/mm per unit area); constant beyond df.
+    F(df) = Gc - sigc d0 / 2.  Callers guarantee d >= d0."""
+    d0, df = law_params(K0, sigc, Gc, alpha)
+    return sigc * (df - d0) * s_integral((d - d0) / (df - d0), alpha)

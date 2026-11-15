@@ -83,13 +83,17 @@ def cantilever(ny, kind="Q4IM", kinematics="linear", load="force", P=230.0, v=0.
 # S2: single cohesive element (one COH2D4-like segment, 1 mm long, width 1) under a prescribed
 # top-face displacement path.
 # --------------------------------------------------------------------------------------------
-def single_cohesive(law, un_path, us_path, times, mu=0.0, quadrature="nodal"):
+def single_cohesive(law, un_path, us_path, times, mu=0.0, quadrature="nodal", history="update"):
     """Response of one cohesive segment whose top nodes follow (us_path, un_path) uniformly.
 
     Args:
         law: AlphaLawParams or TabularLawParams.
         un_path, us_path: (n+1,) prescribed normal / shear top displacement (mm), starting at 0.
         times: (n+1,) times (s); used only for viscous regularisation (mu > 0).
+        history: "update" (S2: update the history at the new separation, then evaluate the secant
+            traction) or "monolithic" (S3b: forces = gradient of the incremental potential at the
+            frozen history of the previous increment, then update the history).  Identical in exact
+            arithmetic; the S3b gate checks both against ABAQUS.
     Returns dict of (n+1,) arrays: tn, ts (tractions, MPa), D, Dv, dmax, F1, F2 (top nodal force
     sums, N), W (external work, N*mm, trapezoid), psi (stored energy), diss = W - psi.
     """
@@ -109,12 +113,20 @@ def single_cohesive(law, un_path, us_path, times, mu=0.0, quadrature="nodal"):
         hist, W, F_old, u_old = carry
         un, us, dt = inp
         u = u_of(un, us)
-        hist = itf.update_history(u, hist, law, mu, dt)
-        F = jax.grad(itf.energy)(u, hist["Dv"], K0)[top].sum(axis=0)
+        if history == "monolithic":
+            a, b = (0.0, 1.0) if mu == 0.0 else (mu / (mu + dt), dt / (mu + dt))
+            Fall = jax.grad(itf.energy_incremental)(u, hist["dmax"], hist["Dv"], law, a, b, K0)
+            hist = itf.update_history(u, hist, law, mu, dt)
+            F = Fall[top].sum(axis=0)
+            tn, ts = F[1] / 1.0, F[0] / 1.0                     # unit area: traction = nodal force sum
+        else:
+            hist = itf.update_history(u, hist, law, mu, dt)
+            F = jax.grad(itf.energy)(u, hist["Dv"], K0)[top].sum(axis=0)
+            tn, ts = itf.tractions(u, hist, K0)
+            tn, ts = tn[0, 0], ts[0, 0]
         W = W + 0.5 * jnp.sum((F + F_old) * (u[2] - u_old[2]))
-        tn, ts = itf.tractions(u, hist, K0)
         psi = itf.energy(u, hist["Dv"], K0)
-        out = dict(tn=tn[0, 0], ts=ts[0, 0], D=hist["D"][0, 0], Dv=hist["Dv"][0, 0],
+        out = dict(tn=tn, ts=ts, D=hist["D"][0, 0], Dv=hist["Dv"][0, 0],
                    dmax=hist["dmax"][0, 0], F1=F[0], F2=F[1], W=W, psi=psi)
         return (hist, W, F, u), out
 
@@ -127,14 +139,16 @@ def single_cohesive(law, un_path, us_path, times, mu=0.0, quadrature="nodal"):
     return out
 
 
-def two_block_bar(law, deltas, kind="Q4IM", gap=0.4, W=15.0, max_stagger=50):
+def two_block_bar(law, deltas, kind="Q4IM", gap=0.4, W=15.0, max_stagger=50, history="staggered"):
     """S2 test 6: two 1 x 1 mm Q4/Q4IM blocks joined by one cohesive segment (gap ``gap``),
     bottom face fixed in y, top face pulled to y-displacement Delta (each value of ``deltas``),
     with one node fixed in x per block (lateral contraction free).  Staggered history:
     solve with damage frozen, update history, repeat until it no longer changes.
+    history="monolithic" (S3b): one Newton solve per Delta on the incremental potential
+    (psi_incremental) at the history of the previous Delta, then one history update.
 
     Returns dict of arrays per Delta: R (top reaction, N), delta_n (interface opening),
-    t_n (interface traction), D, n_stagger.
+    t_n (interface traction), D, n_stagger (solves per Delta), newton (total Newton iterations).
     """
     import jax.numpy as jnp
     from .elements import BulkModel
@@ -153,22 +167,35 @@ def two_block_bar(law, deltas, kind="Q4IM", gap=0.4, W=15.0, max_stagger=50):
 
     fixed = np.array([2 * 0, 2 * 0 + 1, 2 * 1 + 1, 2 * 7, 2 * 6 + 1, 2 * 7 + 1])
     top_y = np.array([2 * 6 + 1, 2 * 7 + 1])
-    solver = SparseNewton(energy, bulk.n_dof, [bulk.elem_dofs, itf.elem_dofs], fixed)
+    def energy_mono(U, dmax_n, Dv_n):
+        return bulk.energy(U) + itf.energy_incremental(U[: 2 * nn].reshape(-1, 2), dmax_n, Dv_n, law, 0.0, 1.0, law.K0)
+
+    mono = history == "monolithic"
+    solver = SparseNewton(energy_mono if mono else energy, bulk.n_dof, [bulk.elem_dofs, itf.elem_dofs], fixed)
     U = np.zeros(bulk.n_dof)
     hist = itf.zero_history()
-    out = {k: [] for k in ("R", "delta_n", "t_n", "D", "n_stagger")}
+    out = {k: [] for k in ("R", "delta_n", "t_n", "D", "n_stagger", "newton")}
     for Dl in deltas:
         U[top_y] = Dl
-        for it in range(max_stagger):
+        n_newton = 0
+        if mono:
+            res = solver.solve(U, None, hist["dmax"], hist["Dv"], rtol=1e-12, atol=1e-14)
+            assert res.converged, res.residual_history
+            U, it, n_newton = res.U, 0, res.iterations
+            r = solver.residual(U, np.zeros(bulk.n_dof), hist["dmax"], hist["Dv"])
+            hist = itf.update_history(jnp.asarray(U[: 2 * nn].reshape(-1, 2)), hist, law)
+        for it in range(0 if mono else max_stagger):
             res = solver.solve(U, None, hist["Dv"], rtol=1e-12, atol=1e-14)
             assert res.converged, res.residual_history
             U = res.U
+            n_newton += res.iterations
             new = itf.update_history(jnp.asarray(U[: 2 * nn].reshape(-1, 2)), hist, law)
             change = float(jnp.max(jnp.abs(new["D"] - hist["D"])))
             hist = new
             if change < 1e-14:
                 break
-        r = solver.residual(U, np.zeros(bulk.n_dof), hist["Dv"])
+        if not mono:
+            r = solver.residual(U, np.zeros(bulk.n_dof), hist["Dv"])
         dn, _ = itf.separations(jnp.asarray(U[: 2 * nn].reshape(-1, 2)))
         tn, _ = itf.tractions(jnp.asarray(U[: 2 * nn].reshape(-1, 2)), hist, law.K0)
         out["R"].append(r[top_y].sum())
@@ -176,6 +203,7 @@ def two_block_bar(law, deltas, kind="Q4IM", gap=0.4, W=15.0, max_stagger=50):
         out["t_n"].append(float(tn.mean()))
         out["D"].append(float(hist["D"].mean()))
         out["n_stagger"].append(it + 1)
+        out["newton"].append(n_newton)
     out = {k: np.array(v) for k, v in out.items()}
     out["area"] = 1.0 * W
     return out

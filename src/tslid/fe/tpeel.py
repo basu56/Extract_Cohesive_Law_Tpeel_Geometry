@@ -49,9 +49,13 @@ class TPeelModel:
         kinematics: bulk energy, "svk" (default, D21 update), "hencky" or "linear".
         kind: "Q4IM" (CPE4I) or "Q4".
         quadrature, frame: CohesiveInterface options ("nodal" = COH2D4, "global" frame).
+        coupling: "finite" (R(theta), NLGEOM = YES) or "linear" (u_s = u_RP + theta e3 x dX,
+            what ABAQUS uses with NLGEOM = NO).
     """
 
-    def __init__(self, deck, kinematics="svk", kind="Q4IM", quadrature="nodal", frame="global"):
+    def __init__(self, deck, kinematics="svk", kind="Q4IM", quadrature="nodal", frame="global",
+                 coupling="finite"):
+        self.coupling = coupling
         self.deck = read_inp(deck) if isinstance(deck, str) else deck
         d = self.deck
         self.coords = d.coords
@@ -138,7 +142,8 @@ class TPeelModel:
         for c in self.couplings:
             th = q[c["theta"]]
             urp = U[2 * c["ref"]: 2 * c["ref"] + 2]
-            us = urp[None, :] + c["dX"] @ (rot(th) - np.eye(2)).T
+            A = rot(th) - np.eye(2) if self.coupling == "finite" else th * drot(0.0)
+            us = urp[None, :] + c["dX"] @ A.T
             U[2 * c["slaves"]] = us[:, 0]
             U[2 * c["slaves"] + 1] = us[:, 1]
         return U
@@ -148,7 +153,8 @@ class TPeelModel:
         indep = np.setdiff1d(np.arange(self.n_full), self.slave_dofs)
         rows, cols, vals = [indep], [indep], [np.ones(len(indep))]
         for c in self.couplings:
-            dR = c["dX"] @ drot(q[c["theta"]]).T                   # (n_s, 2): d u_s / d theta
+            th = q[c["theta"]] if self.coupling == "finite" else 0.0
+            dR = c["dX"] @ drot(th).T                               # (n_s, 2): d u_s / d theta
             for a in range(2):
                 rs = 2 * c["slaves"] + a
                 rows += [rs, rs]
@@ -170,7 +176,7 @@ class TPeelModel:
         J = self.lift_jacobian(q)
         Kq = (J.T @ KU @ J).tocsr()
         G = np.zeros(self.n_q)
-        for c in self.couplings:
+        for c in self.couplings if self.coupling == "finite" else []:
             Rd = c["dX"] @ rot(q[c["theta"]]).T                     # R dX, (n_s, 2)
             rs = rU[(2 * c["slaves"][:, None] + np.arange(2))]
             G[c["theta"]] = -np.sum(rs * Rd)

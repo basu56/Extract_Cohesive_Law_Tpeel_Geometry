@@ -26,6 +26,7 @@ import jax.numpy as jnp
 import numpy as np
 
 from .laws_jax import damage as damage_alpha
+from .laws_jax import envelope_integral as envelope_alpha
 
 GAUSS2 = (np.array([-1.0, 1.0]) / np.sqrt(3.0), np.array([1.0, 1.0]))
 NODAL2 = (np.array([-1.0, 1.0]), np.array([1.0, 1.0]))
@@ -68,6 +69,14 @@ class AlphaLawParams:
     def damage(self, dmax):
         return damage_alpha(dmax, self.K0, self.sigc, self.Gc, self.alpha)
 
+    @property
+    def d0(self):
+        return self.sigc / self.K0
+
+    def envelope_integral(self, d):
+        """int_{d0}^{d} T(s) ds, d >= d0 (closed form, laws_jax.envelope_integral)."""
+        return envelope_alpha(d, self.K0, self.sigc, self.Gc, self.alpha)
+
 
 @dataclass(frozen=True)
 class TabularLawParams:
@@ -88,6 +97,24 @@ class TabularLawParams:
         D = jnp.interp(u, jnp.asarray(self.u_tab), jnp.asarray(self.D_tab), left=0.0, right=1.0)
         return jnp.where(u <= 0.0, 0.0, D)
 
+    def envelope_integral(self, d):
+        """int_{d0}^{d} T(s) ds, d >= d0, with T(s) = (1 - D(s)) K0 s and D linear in s on each
+        table segment: T is quadratic per segment, integrated exactly (cumulative sums at the
+        table nodes + the partial segment).  Zero traction beyond the table (D = 1)."""
+        sk = self.d0 + np.asarray(self.u_tab, dtype=float)
+        Dk = np.asarray(self.D_tab, dtype=float)
+        m = np.diff(Dk) / np.diff(sk)                                     # dD/ds per segment
+        c = 1.0 - Dk[:-1] + m * sk[:-1]                                   # T = K0 s (c - m s)
+
+        def seg(k, a, b):
+            return self.K0 * (c[k] * (b ** 2 - a ** 2) / 2 - m[k] * (b ** 3 - a ** 3) / 3)
+
+        C = np.r_[0.0, np.cumsum(seg(np.arange(len(m)), sk[:-1], sk[1:]))]
+        dc = jnp.clip(d, sk[0], sk[-1])
+        k = jnp.clip(jnp.searchsorted(jnp.asarray(sk), dc, side="right") - 1, 0, len(m) - 1)
+        ck, mk, s0 = jnp.asarray(c)[k], jnp.asarray(m)[k], jnp.asarray(sk)[k]
+        return jnp.asarray(C)[k] + self.K0 * (ck * (dc ** 2 - s0 ** 2) / 2 - mk * (dc ** 3 - s0 ** 3) / 3)
+
 
 def update_damage(dm, dmax_old, Dv_old, law, mu=0.0, dt=1.0):
     """History update at quadrature points.  Returns (dmax, D, Dv): D inviscid, Dv the regularised
@@ -96,6 +123,40 @@ def update_damage(dm, dmax_old, Dv_old, law, mu=0.0, dt=1.0):
     D = law.damage(dmax)
     Dv = D if mu == 0.0 else (dt * D + mu * Dv_old) / (mu + dt)
     return dmax, D, Dv
+
+
+def psi_incremental(dn, ds, dmax_n, Dv_n, law, a, b, K0):
+    """Incremental potential of the cohesive law at frozen history (Step S3b; docs/solver/INTERFACE.md).
+
+    With r = dt/mu, a = 1/(1 + r) = mu/(mu + dt) and b = r/(1 + r) = dt/(mu + dt) (inviscid: a = 0,
+    b = 1):
+        Phi = a (1 - Dv_n) K0/2 dm^2 + b Psi_env(dm) + K0/2 <-dn>_+^2,  dm^2 = <dn>_+^2 + ds^2,
+        Psi_env = (1 - D_n) K0/2 dm^2                                   (dm <= d*)
+                = (1 - D_n) K0/2 d*^2 + F(dm) - F(d*)                   (dm >  d*)
+    with d* = max(dmax_n, d0), D_n = D(dmax_n) and F the envelope integral of the law.  Its gradient
+    in (dn, ds) is exactly the traction of update_damage (dmax_n+1 = max(dmax_n, dm), D_n+1 = D(dmax_n+1),
+    Dv_n+1 = a Dv_n + b D_n+1) evaluated at the new separation: a single Newton solve per increment
+    replaces the staggered solve/update loop.  The quadratic branch is written in dm^2 (smooth at
+    dm = 0); the other branch takes sqrt only of dm^2 > d*^2 > 0 (double-where).  law=None: elastic.
+    """
+    dm2 = pos(dn) ** 2 + ds ** 2
+    comp = 0.5 * K0 * pos(-dn) ** 2
+    if law is None:
+        return 0.5 * K0 * dm2 + comp
+    D_n = law.damage(dmax_n)
+    dstar = jnp.maximum(dmax_n, law.d0)
+    quad = dm2 <= dstar ** 2
+    dm = jnp.sqrt(jnp.where(quad, dstar ** 2 + 1.0, dm2))
+    dm = jnp.where(quad, dstar, dm)
+    env_q = 0.5 * (1.0 - D_n) * K0 * dm2
+    env_s = 0.5 * (1.0 - D_n) * K0 * dstar ** 2 + law.envelope_integral(dm) - law.envelope_integral(dstar)
+    env = jnp.where(quad, env_q, env_s)
+    return a * (1.0 - Dv_n) * 0.5 * K0 * dm2 + b * env + comp
+
+
+def viscous_weights(mu, dt):
+    """(a, b) of psi_incremental: a = mu/(mu + dt), b = dt/(mu + dt)."""
+    return (0.0, 1.0) if mu == 0.0 else (mu / (mu + dt), dt / (mu + dt))
 
 
 class CohesiveInterface:
@@ -150,6 +211,12 @@ class CohesiveInterface:
         """Interface energy (N*mm) with the stiffness damage Dstiff (n_seg, n_q) frozen."""
         dn, ds = self.separations(u)
         dens = psi(dn, ds, Dstiff, K0)
+        return self.width * jnp.sum(dens * self.w[None, :] * (0.5 * jnp.asarray(self.L))[:, None])
+
+    def energy_incremental(self, u, dmax_n, Dv_n, law, a, b, K0):
+        """Interface incremental potential (N*mm) at frozen history (dmax_n, Dv_n), psi_incremental."""
+        dn, ds = self.separations(u)
+        dens = psi_incremental(dn, ds, dmax_n, Dv_n, law, a, b, K0)
         return self.width * jnp.sum(dens * self.w[None, :] * (0.5 * jnp.asarray(self.L))[:, None])
 
     def update_history(self, u, hist, law, mu=0.0, dt=1.0):
