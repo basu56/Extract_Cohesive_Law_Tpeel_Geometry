@@ -23,6 +23,12 @@ assembled from batched 4 x 4 solves, solved for du, and da = K_ii^-1 (r_i - K_ik
 element.  This is exactly the Newton step of the full system (same dq to roundoff).
 
 Same energy as TPeelModel.energy_full to roundoff [D, tests/fe/test_s3c_assembly.py].
+
+S5.0: the law parameters (an AlphaLawParams pytree, ``theta``) are an explicit argument of every
+jitted kernel (energy, value_and_grad, hessian, update_history), so jax.jvp / jax.vjp with respect to
+them is available on the production path (sensitivity.py).  ``self.theta`` (default ``model.law``) is
+what the public methods pass; replacing it (``set_theta``) changes the law without recompiling.  The
+cohesive stiffness everywhere (penalty in compression included) is theta.K0.
 """
 import time
 from collections import defaultdict
@@ -127,8 +133,9 @@ class ElementSystem:
         linsolve: callable(A_csr, b) -> x on the assembled free (or condensed) system; default SuperLU.
     """
 
-    def __init__(self, model, condense=False, linsolve=None):
+    def __init__(self, model, condense=False, linsolve=None, theta=None):
         m = self.model = model
+        self.theta = model.law if theta is None else theta
         self.condense = bool(condense) and model.bulk.n_modes > 0
         self.n_q, self.n_full, self.n_nodes = m.n_q, m.n_full, m.n_nodes
         self.free, self.fixed, self.slave_dofs, self.out = m.free, m.fixed, m.slave_dofs, m.out
@@ -218,17 +225,18 @@ class ElementSystem:
         frame, N, w, Wc = self._coh_frame, self._coh_N, self._coh_w, self._W_coh
         model = self.model
 
-        def f(v, c, hist, glob):
+        def f(v, c, hist, glob, law):
             u, amp = self._local_u(v, g, c)
             if g.kind == "bulk":
                 return _bulk_energy(u, amp, c, psi_fn, lam, mu, W)
             dn, ds = _separations(u, c, frame, N)
+            K0 = model.K0 if law is None else law.K0
             if model.history == "monolithic":
                 dmax_n, Dv_n = hist
                 a, b = glob
-                dens = psi_incremental(dn, ds, dmax_n, Dv_n, model.law, a, b, model.K0)
+                dens = psi_incremental(dn, ds, dmax_n, Dv_n, law, a, b, K0)
             else:
-                dens = psi(dn, ds, hist[0], model.K0)
+                dens = psi(dn, ds, hist[0], K0)
             return Wc * jnp.sum(dens * w * 0.5 * c["L"])
         return f
 
@@ -300,30 +308,30 @@ class ElementSystem:
         def gather(q, g):
             return jnp.append(q, 0.0)[g.qidx_j]
 
-        def value_and_grad(q, h):
+        def value_and_grad(q, h, law):
             E, r = 0.0, jnp.zeros(n_q + 1)
             for g, f in zip(groups, efs):
                 hist, glob = self._hist_split(g, h)
                 V = gather(q, g)
-                e, ge = jax.vmap(jax.value_and_grad(f), in_axes=(0, 0, 0, None))(V, g.consts, hist, glob)
+                e, ge = jax.vmap(jax.value_and_grad(f), in_axes=(0, 0, 0, None, None))(V, g.consts, hist, glob, law)
                 E = E + jnp.sum(e)
                 r = r.at[g.qidx_j.ravel()].add(ge.ravel())
             return E, r[:n_q]
 
-        def energy(q, h):
+        def energy(q, h, law):
             E = 0.0
             for g, f in zip(groups, efs):
                 hist, glob = self._hist_split(g, h)
-                E = E + jnp.sum(jax.vmap(f, in_axes=(0, 0, 0, None))(gather(q, g), g.consts, hist, glob))
+                E = E + jnp.sum(jax.vmap(f, in_axes=(0, 0, 0, None, None))(gather(q, g), g.consts, hist, glob, law))
             return E
 
-        def hessian(q, h, r):
+        def hessian(q, h, r, law):
             """CSR data of the free (or condensed) system, its RHS, and the IM recovery data."""
             data, rhs, aux = jnp.zeros(nnz + 1), jnp.zeros(n_sys + 1), []
             rr = jnp.append(r, 0.0)
             for g, f in zip(groups, efs):
                 hist, glob = self._hist_split(g, h)
-                Ke = jax.vmap(jax.hessian(f), in_axes=(0, 0, 0, None))(gather(q, g), g.consts, hist, glob)
+                Ke = jax.vmap(jax.hessian(f), in_axes=(0, 0, 0, None, None))(gather(q, g), g.consts, hist, glob, law)
                 re = rr[g.qidx_j]                                        # assembled residual at local slots
                 ks, is_ = g.k_slots, g.i_slots
                 if is_.size:
@@ -359,11 +367,48 @@ class ElementSystem:
                 dq = dq.at[jnp.asarray(g.qidx[:, g.i_slots]).ravel()].set(da.ravel())
             return dq[:n_q]
 
+        def hessian_multi(q, h, R, law):
+            """hessian() for p right-hand sides R (p, n_q) on one tangent (S5a): CSR data, the condensed
+            RHS (p, n_sys) and the recovery data [(XK, Xr (p, E, 4)) or None per group]."""
+            data, rhs, aux = jnp.zeros(nnz + 1), jnp.zeros((R.shape[0], n_sys + 1)), []
+            RR = jnp.concatenate([R, jnp.zeros((R.shape[0], 1))], axis=1)
+            for g, f in zip(groups, efs):
+                hist, glob = self._hist_split(g, h)
+                Ke = jax.vmap(jax.hessian(f), in_axes=(0, 0, 0, None, None))(gather(q, g), g.consts, hist, glob, law)
+                re = RR[:, g.qidx_j]                                     # (p, E, n_loc)
+                ks, is_ = g.k_slots, g.i_slots
+                if is_.size:
+                    nk = len(ks)
+                    perm = np.r_[ks, is_]
+                    if not np.array_equal(perm, np.arange(len(perm))):
+                        Ke, re = Ke[:, perm][:, :, perm], re[:, :, perm]
+                    Kkk, Kki = Ke[:, :nk, :nk], Ke[:, :nk, nk:]
+                    Kik, Kii = Ke[:, nk:, :nk], Ke[:, nk:, nk:]
+                    Ai = inv4(Kii)
+                    XK = jnp.einsum("eij,ejk->eik", Ai, Kik)
+                    Xr = jnp.einsum("eij,pej->pei", Ai, re[:, :, nk:])
+                    Kc = Kkk - jnp.einsum("eij,ejk->eik", Kki, XK)
+                    rhs = rhs.at[:, g.rpos.ravel()].add(
+                        (-jnp.einsum("eij,pej->pei", Kki, Xr)).reshape(R.shape[0], -1))
+                    aux.append((XK, Xr))
+                else:
+                    Kc = Ke
+                    aux.append(None)
+                data = data.at[g.scatter].add(Kc.reshape(Kc.shape[0], -1).ravel())
+            rhs = rhs[:, :n_sys] + R[:, jnp.asarray(self.sys_dofs)]
+            return data[:nnz], rhs, aux
+
+        def recover_multi(X, aux):
+            """recover() for p solutions X (p, n_sys) -> (p, n_q)."""
+            def one(x, xr):
+                return recover(x, [None if ax is None else (ax[0], r) for ax, r in zip(aux, xr)])
+            return jax.vmap(one)(X, [None if ax is None else ax[1] for ax in aux])
+
         def bulk_energy(q):
             E = 0.0
             for g, f in zip(groups, efs):
                 if g.kind == "bulk":
-                    E = E + jnp.sum(jax.vmap(f, in_axes=(0, 0, 0, None))(gather(q, g), g.consts, (), ()))
+                    E = E + jnp.sum(jax.vmap(f, in_axes=(0, 0, 0, None, None))(gather(q, g), g.consts, (), (), None))
             return E
 
         self._bulkE = jax.jit(bulk_energy)
@@ -378,22 +423,23 @@ class ElementSystem:
                 dn, ds = dn.at[jnp.asarray(g.sel)].set(a), ds.at[jnp.asarray(g.sel)].set(b)
             return dn, ds
 
-        law, mu_v = self.model.law, self.model.viscosity
+        mu_v = self.model.viscosity
 
-        def update_history(q, dmax, Dv, dt):
+        def update_history(q, dmax, Dv, dt, law):
+            """S2 update_damage at the cohesive points: (dmax, D, Dv) after the converged q."""
             dn, ds = separations(q)
-            mu_eff = mu_v
-            dmx = jnp.maximum(dmax, effective_separation(dn, ds))
-            D = law.damage(dmx)
-            Dv_new = D if mu_eff == 0.0 else (dt * D + mu_eff * Dv) / (mu_eff + dt)
-            return dmx, D, Dv_new
+            return update_damage(effective_separation(dn, ds), dmax, Dv, law, mu_v, dt)
 
+        self._raw = dict(value_and_grad=value_and_grad, update_history=update_history, separations=separations,
+                         hessian_multi=hessian_multi, recover_multi=recover_multi)
         self._vg = jax.jit(value_and_grad)
         self._energy = jax.jit(energy)
         self._hess = jax.jit(hessian)
         self._recover = jax.jit(recover)
         self._seps = jax.jit(separations)
-        self._upd = jax.jit(update_history) if law is not None else None
+        self._upd = jax.jit(update_history) if self.model.law is not None else None
+        self._hess_multi = jax.jit(hessian_multi)
+        self._recover_multi = jax.jit(recover_multi)
 
     # ------------------------------------------------------------------ public API (TPeelModel-like)
     def _tick(self, key, t0):
@@ -401,6 +447,11 @@ class ElementSystem:
         self.timers[key] += t - t0
         self.counts[key] += 1
         return t
+
+    def set_theta(self, theta):
+        """Use the law ``theta`` (same pytree structure as model.law) in every following call.  Kernels
+        take it as an argument, so this does not recompile (S5.0)."""
+        self.theta = theta
 
     def jit_cache_sizes(self):
         return {k: getattr(self, "_" + k)._cache_size() for k in ("vg", "energy", "hess", "recover")}
@@ -422,7 +473,7 @@ class ElementSystem:
 
     def value_and_grad(self, q, h):
         t0 = time.perf_counter()
-        E, r = self._vg(jnp.asarray(q), h)
+        E, r = self._vg(jnp.asarray(q), h, self.theta)
         E, r = float(E), np.asarray(r)
         self._tick("value_and_grad", t0)
         return E, r
@@ -431,12 +482,12 @@ class ElementSystem:
         return self.value_and_grad(q, h)[1]
 
     def energy(self, q, h):
-        return float(self._energy(jnp.asarray(q), h))
+        return float(self._energy(jnp.asarray(q), h, self.theta))
 
     def system(self, q, h, r):
         """(A (CSR, n_sys x n_sys), rhs, aux) of the Newton step at q (r = residual at q)."""
         t0 = time.perf_counter()
-        data, rhs, aux = self._hess(jnp.asarray(q), h, jnp.asarray(r))
+        data, rhs, aux = self._hess(jnp.asarray(q), h, jnp.asarray(r), self.theta)
         jax.block_until_ready(data)
         t0 = self._tick("hessian", t0)
         A = sps.csr_matrix((np.asarray(data), self.indices, self.indptr), shape=(self.n_sys, self.n_sys))
@@ -469,7 +520,7 @@ class ElementSystem:
         if self._upd is None:
             return hist
         t0 = time.perf_counter()
-        dmax, D, Dv = self._upd(jnp.asarray(q), hist["dmax"], hist["Dv"], dt)
+        dmax, D, Dv = self._upd(jnp.asarray(q), hist["dmax"], hist["Dv"], dt, self.theta)
         out = dict(dmax=dmax, D=D, Dv=Dv)
         jax.block_until_ready(Dv)
         self._tick("history", t0)

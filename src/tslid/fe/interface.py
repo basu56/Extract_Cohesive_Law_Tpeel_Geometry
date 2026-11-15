@@ -69,7 +69,10 @@ def effective_separation(dn, ds):
 
 @dataclass(frozen=True)
 class AlphaLawParams:
-    """Analytic alpha-family law (ABAQUS LINEAR / EXPONENTIAL)."""
+    """Analytic alpha-family law (ABAQUS LINEAR / EXPONENTIAL).
+
+    A JAX pytree with leaves (K0, sigc, Gc, alpha) (S5.0): it is passed as a differentiable argument
+    of the jitted energy / residual / tangent / history kernels (assembly.py), never closed over."""
     K0: float
     sigc: float
     Gc: float
@@ -85,6 +88,9 @@ class AlphaLawParams:
     def envelope_integral(self, d):
         """int_{d0}^{d} T(s) ds, d >= d0 (closed form, laws_jax.envelope_integral)."""
         return envelope_alpha(d, self.K0, self.sigc, self.Gc, self.alpha)
+
+
+jax.tree_util.register_dataclass(AlphaLawParams, data_fields=["K0", "sigc", "Gc", "alpha"], meta_fields=[])
 
 
 @dataclass(frozen=True)
@@ -127,8 +133,12 @@ class TabularLawParams:
 
 def update_damage(dm, dmax_old, Dv_old, law, mu=0.0, dt=1.0):
     """History update at quadrature points.  Returns (dmax, D, Dv): D inviscid, Dv the regularised
-    damage used for the stiffness (Dv = D when mu = 0)."""
-    dmax = jnp.maximum(dmax_old, dm)
+    damage used for the stiffness (Dv = D when mu = 0).
+
+    dmax = dm on loading (dm > dmax_old), else dmax_old (S5): written with where, not maximum, so the
+    derivative is that of the active branch, with a tie counted as unloading (jnp.maximum would split
+    a tie's derivative 1/2 : 1/2).  Same values as max(dmax_old, dm)."""
+    dmax = jnp.where(dm > dmax_old, dm, dmax_old)
     D = law.damage(dmax)
     Dv = D if mu == 0.0 else (dt * D + mu * Dv_old) / (mu + dt)
     return dmax, D, Dv

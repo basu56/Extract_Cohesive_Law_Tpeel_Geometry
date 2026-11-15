@@ -13,6 +13,9 @@ factorization of a fixed pattern) reuse it across Newton iterations and incremen
                 solve (phase 23) per call.
 - pardiso_sym:  same, real symmetric indefinite (mtype -2) on the upper triangle; valid because the
                 Newton matrix is the Hessian of the incremental potential (symmetric to roundoff).
+All accept b of shape (n,) or (n, p) (p right-hand sides on one factorization; S5a sensitivities).
+Determinism (S5, D27): PARDISO with one thread and MKL_CBWR=COMPATIBLE, or the SuperLU solvers, give
+bit-identical repeated runs (shown in the S5a log); multithreaded PARDISO need not.
 UMFPACK and CHOLMOD need SuiteSparse, which Negishi does not provide (no module, no conda): not benchmarked.
 """
 import numpy as np
@@ -84,9 +87,10 @@ class Pardiso:
             self.n_analysis += 1
         self.ps.set_phase(23)
         self.ps._check_A(A)
-        x = self.ps._call_pardiso(A, np.asfortranarray(np.asarray(b, dtype=float)))
+        b = np.asarray(b, dtype=float)
+        x = self.ps._call_pardiso(A, np.asfortranarray(b))
         self.n_perturbed += int(self.ps.get_iparm(14) > 0)      # perturbed pivots in this factorization
-        return np.asarray(x).ravel()
+        return np.asarray(x).ravel() if b.ndim == 1 else np.asarray(x).reshape(b.shape)
 
 
 class PardisoSym(Pardiso):

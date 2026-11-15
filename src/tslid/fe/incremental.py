@@ -212,7 +212,7 @@ def newton_energy(model, q, h, opt, log=None):
 
 
 def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_increments=10 ** 6,
-        on_increment=None, newton=None, schedule=None):
+        on_increment=None, newton=None, schedule=None, on_converged=None):
     """Integrate the step 0 -> T.  ``record(model, t, q, hist, h_used, r)`` returns a dict stored per
     converged increment (t = 0 included).  ``on_increment(row, inc_log)`` is called right after each
     record (inc_log None for t = 0), so a driver can write results as the run goes (S3c).
@@ -220,7 +220,10 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
     ``schedule``: increasing end times of the increments (e.g. the converged times of another run);
     each increment ends on the next scheduled time (a failed attempt is cut back as usual and the
     increment then continues to the same scheduled time).  Used by the S3c tolerance study, so that
-    two tolerances are compared on identical increments.  Returns RunResult."""
+    two tolerances are compared on identical increments.
+    ``on_converged(q, hist_old, h, hist_new, dt)`` (S5a) is called after each converged increment,
+    before ``record``, with the converged q, the history it was solved with (hist_old, frozen
+    arguments h) and the updated history (monolithic history only).  Returns RunResult."""
     newton = newton or newton_ls
     opt = opt or SolverOptions()
     out = RunResult()
@@ -298,6 +301,8 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
                 out.failed, out.message = True, "dt %.3g < dtmin %.3g at t = %.6g" % (dt, dtmin, t)
                 break
             continue
+        if on_converged is not None:
+            on_converged(qn, hist, h, new, dt)
         q_prev, dt_prev, q, hist = q, dt, qn, new
         t += dt
         n_inc += 1
