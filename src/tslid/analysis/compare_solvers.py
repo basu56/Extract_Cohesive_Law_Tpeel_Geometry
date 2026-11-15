@@ -18,7 +18,8 @@ Reported (gates from docs/solver/S3_INSTRUCTIONS.md, S3d item 4):
   dP_peak      (P_peak,new - P_peak,ref) / P_peak,ref                     gate |.| <= 0.1 %
   ddelta_peak  delta_peak,new - delta_peak,ref, and the increment there (larger of the two codes'
                delta steps around their peaks)                             gate |.| <= one increment
-  slope        elastic slope: least-squares P/delta through the origin over P <= 0.2 P_peak;
+  slope        elastic slope: least-squares P/delta through the origin over the rising branch with
+               P <= 0.2 P_peak;
                relative difference
   l_cz         energy_checks.py l_cz (mean over steady propagation), difference in mm and in
                elements (h_coh)                                            gate |.| <= 2 elements
@@ -50,7 +51,8 @@ def peak(d, P):
 
 
 def slope(d, P, Ppk):
-    m = (P <= 0.2 * Ppk) & (d > 0)
+    pre = np.arange(len(P)) < int(np.argmax(P))                  # rising branch only (not the tail)
+    m = pre & (P <= 0.2 * Ppk) & (d > 0)
     if m.sum() < 2:
         return np.nan
     return float(np.sum(P[m] * d[m]) / np.sum(d[m] ** 2))
