@@ -1,6 +1,6 @@
 # Project status (handoff page)
 
-_Last updated: 2026-11-14 (night, S2) by Claude Code. Overwrite this page each session._
+_Last updated: 2026-11-15 (S3c) by Claude Code. Overwrite this page each session._
 
 ## Where we are
 
@@ -108,11 +108,27 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
   - Driver with line search and cutback (`incremental.py`).
   - Coarse damaged T-peel completes: P_peak −2.2e-5 vs ABAQUS on the same deck; 670 s vs ABAQUS 256 s,
     unoptimised.
-  - Staggered coarse comparison (Negishi job 45868159) was still running at the end of the session.
+  - Staggered coarse comparison (job 45868159) timed out at 4 h (≥ 28× slower than monolithic).
 - ABAQUS reference wall times are 36–56 min (not 20–25), from the .msg files.
-- **Stopped for user review after S3b** (as instructed, and because the S3a gate missed).
+- User review of S3a/S3b (2026-11-15): NLGEOM floor accepted, gate revised to ≤ 5e-5 RF2 (**D23**). S3c order
+  set by the user (`S3_INSTRUCTIONS.md` update).
+- **S3c done** [D] (SOLVER_LOG S3c, `results/solver/S3_tpeel/` S3c section, `docs/solver/TPEEL.md` §6):
+  - Profile: 61 % of the S3b coarse run was abandoned attempts before cutbacks, not line search (S3b note
+    corrected).
+  - Gain ladder, coarse, 1 thread: 926 → 657 (energy Newton) → 572 (divergence check) → 179 (element-local
+    assembly) → 102 (IM condensation) → **91 s** (PARDISO-sym with reuse). ABAQUS: 256 s.
+  - Element tangent = jacfwd to 6e-14; condensed step backward error 5e-16.
+  - rtol 1e-6 = loosest tolerance with |ΔP| ≤ 1e-5 P_peak (2.3e-6).
+  - Coarse E4–E6 pass (4.3e-5 / 3.0e-4 / −1.1e-3).
+  - **Production `sw_s40` measured: 490 s on 1 thread (335 s on 4) vs ABAQUS 2321 s.** P_peak +5.7e-6, window
+    max |ΔP| 8.4e-5 P_peak, E4–E6 equal to ABAQUS's (preliminary for S3d).
+  - **D24 proposed**: this configuration + rtol 1e-6; `pypardiso` added to the `fe` extra.
+  - UMFPACK / CHOLMOD not benchmarked (no SuiteSparse on Negishi; a micromamba install was blocked by
+    session permissions).
+- **Stopped for user review after S3c** (as instructed). Production is 0.21× ABAQUS, below the 2× threshold.
 - **Next:**
-  - User: decide on the S3a NLGEOM floor (accept 2–3e-5, or investigate CPE4I NLGEOM first).
-  - Then S3c: profiling, IM condensation, linear solver, tolerance, E4–E6 gate on the coarse deck.
+  - User: confirm D24 (configuration, rtol 1e-6); go-ahead for S3d.
+  - S3d: `compare_solvers.py`, formal `sw_s40` gates, SVK/Hencky toggle, location of the S3a traction
+    difference along the bond (D23), then the other four reference cases.
 - Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested; ABAQUS manual citations
   unverified (user checking 3DS access).

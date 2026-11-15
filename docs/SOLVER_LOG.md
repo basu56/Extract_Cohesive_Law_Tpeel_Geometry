@@ -16,7 +16,7 @@ Update this table at each entry.
 | S0 environment | **done** 2026-11-14 | 16/16 tests on Bell, Negishi node, GitHub CI; `test_laws` OK on Py 3.6 | suite 14–15 s (Bell login, Negishi node) | one locked JAX/tatva env on every machine, with CI |
 | S1 bulk element | **done**, 1 flagged item 2026-11-14 | Q4IM = CPE4I to 1e-8 (linear); NLGEOM v, M ≤ 4e-5; u_tip 1.25 % SVK / 0.30 % Hencky (own value) | ny=20 linear 1.8 s/solve; NL 2.6 s/incr (ABAQUS 50 s total) | locking-free bulk element matching CPE4I; constitutive gap quantified |
 | S2 cohesive interface | **done** 2026-11-14 | 20 inviscid COH2D4 runs ≤ 6.8e-8 σ_c; viscous ≤ 4.8e-8 until D = 1; COH2D4 = nodal quadrature | 2000-increment element history ~0.5 s | ABAQUS cohesive behaviour reproduced exactly, with exact gradients in (K0, σ_c, G_c, α) |
-| S3 T-peel forward vs ABAQUS | **S3a gate missed (explained), S3b done** 2026-11-15; stopped for review | linear T-peel = ABAQUS to 3e-8; NLGEOM 2–3e-5 RF2 at T-peel loads (gate 1e-5); COH2D4 gap kinematics found and implemented; monolithic history = S2 on all 20 runs | production elastic incr. ~7 s (159k unknowns); coarse damaged run 670 s vs ABAQUS 256 s | T-peel imported from the deck node for node; one Newton solve per increment instead of up to 17 passes |
+| S3 T-peel forward vs ABAQUS | **S3a gate missed (explained; revised to 5e-5, D23), S3b done, S3c done** 2026-11-15; stopped for review | linear T-peel = ABAQUS to 3e-8; NLGEOM 2–3e-5 RF2; COH2D4 gap kinematics; monolithic history; S3c: element tangent = jacfwd to 6e-14, coarse E4–E6 pass, production sw_s40 P_peak 5.7e-6, window max 8.4e-5 | production sw_s40 490 s (1 thread, rtol 1e-6) vs ABAQUS 2321 s; coarse 91 s vs 256 s | T-peel imported node for node; one Newton solve per increment; 10× faster than S3b, 0.21× ABAQUS wall on the production case |
 | S4 throughput (batched / GPU) | not started | | | |
 | S5 gradients (adjoint) | not started | | | |
 
@@ -383,3 +383,160 @@ The per-phase totals over the whole run were: jacfwd 278 s, SuperLU 123 s, gradi
 lift/J and J^T K J reduction 179 s, eager history update 47 s. The S3b increment log had counted
 converged increments only. The S3b "Cost / limitations" paragraph should be read with this
 correction.
+
+## S3c — Coarse T-peel with damage: profiling, performance, tolerance, energy gate — 2026-11-15 — commits a63fbc0…034fe59 (code), log in the following commit
+
+Done in the user's order of 2026-11-15 (D23, `S3_INSTRUCTIONS.md` update). Each gain is measured
+separately. Timed runs are pinned to 1 thread with `scripts/fe/pin_threads.sh`: Negishi allocates
+CPUs by memory and sets no cpuset, and ABAQUS ran with `cpus=1`. Negishi AMD EPYC 7763. Rundir
+`/scratch/negishi/basu56/tslid_runs/solver_S3c/`. Tables in `results/solver/S3_tpeel/s3c_*.csv`,
+figure `s3c.png`.
+
+**Built.**
+- `s3_run_tpeel.py` writes records as the run goes: one CSV row per increment, flushed, and the
+  JSON summary and profiles every N increments. It adds phase timers, cProfile, failed-attempt
+  accounting, JIT cache sizes and schedule replay.
+- `tpeel.py`: phase timers, `lift_jax` and a jitted q-energy (`value_and_grad`).
+- `incremental.py`: `newton_energy` (Armijo / residual acceptance, full step first), the
+  divergence check, `on_increment`, `schedule`.
+- `assembly.py` (`ElementSystem`): element-local Hessians with the coupling inside the element,
+  IM condensation with a closed-form 4 × 4 inverse, a jitted history update, the bulk energy.
+- `linsolve.py`: SuperLU, SuperLU-MMD, PARDISO and PARDISO-sym, with the symbolic analysis reused
+  per pattern. `pypardiso` is added to the `fe` extra and the lockfile (x86_64).
+- `tpeel_output.py`: ABAQUS-compatible `_response.csv`, `_profiles.npz`, `.json`, `.sta`.
+- Scripts: `run_s3c.sh`, `run_s3c_ladder.sh`, `run_s3c_tol.sh`, `run_s3c_prod.sh`,
+  `run_s3c_bench.sh`, `s3c_bench.py`, `s3c_summary.py`, `s3c_plot.py`, `pin_threads.sh`.
+- Tests: `tests/fe/test_s3c_assembly.py`, 9 tests.
+
+**1. Profile (S3b code, coarse, job 45898677) [D].**
+- Converged increments take only 297 s of the 753 s. **About 456 s are the 321 abandoned
+  attempts before cutbacks**: 16 iterations each, often with 8 line-search halvings.
+- Totals over the run: sparse jacfwd 278 s (9979 calls), SuperLU 123 s, gradient 84 s, numpy
+  lift/J and JᵀKJ 179 s, eager history update 47 s.
+- No recompilation: every jitted function has a cache size of 1, both here and in all S3c runs.
+- Corrects the S3b attribution; see the dated note under S3b.
+
+**2. Gain ladder (coarse, all configurations in one job, 1 thread; two copies, jobs
+45900830/45900831; mean, A/B spread ≤ 12 % before item 3 and ≤ 1 % after) [D].**
+
+| step | wall | converged / abandoned | iterations (all attempts) | gain |
+|---|---|---|---|---|
+| S3b path (residual line search, jacfwd, SuperLU) | 926 s | 391 / 534 s | 7687 | – |
+| item 2: jitted q-energy, energy Newton | 657 s | 236 / 420 s | 6946 | −29 % |
+| item 2b: divergence check (I₀ = 4) | 572 s | 251 / 321 s | 5792 | −13 % |
+| item 3: element-local assembly | 179 s | 74 / 104 s | 5785 | 3.2× |
+| item 4: IM condensation (7282 → 2802 unknowns) | 102 s | 41 / 61 s | 5786 | 1.74× |
+| item 5: PARDISO symmetric, symbolic reuse | **91 s** | 37 / 54 s | 5784 | −11 % |
+| (item 5 without condensation) | 110 s | | 5781 | |
+| ABAQUS, same deck | 256 s | | 2910 | |
+
+- Every step has the same converged response: in the compare_ld window (δ ≤ 1.2756 mm) the
+  max |ΔP| vs ABAQUS is 0.52 % P_peak (a coarse snap event, also present in S3b) and the rms is
+  3.0e-4.
+- From item 2 on, the energy-Newton variants agree with each other to ≤ 3.5e-12 P_peak in the
+  window. Their increment path differs from S3b's (1684–1691 vs 1778 increments), which moves
+  snap events by ≤ 0.15 % P_peak.
+- Outside the window, the end-of-ligament collapse (P 176 → 4 N over Δδ = 3e-4 mm) sits 5e-5 mm
+  apart between the codes, which reads as 3.9 % at one grid point.
+
+**3. Production micro-benchmarks (`sw_s40`, 158,954 free / 54,770 condensed, state at 0.06 T,
+bench2 jobs 45900589/45900590) [D].**
+
+| | 1 thread | 4 threads |
+|---|---|---|
+| tangent: jacfwd + JᵀKJ (S3b) | 1.77 s | 0.93 s |
+| tangent: element | 0.217 s | 0.116 s |
+| tangent: element, condensed | 0.218 s | 0.119 s |
+| solve, free: SuperLU / SuperLU-MMD / PARDISO / PARDISO-sym | 1.22 / 0.34 / 0.19 / 0.144 s | 1.25 / 0.34 / 0.076 / 0.062 s |
+| solve, condensed: same order | 0.53 / 0.17 / 0.12 / 0.088 s | 0.53 / 0.18 / 0.040 / 0.031 s |
+
+- The element tangent equals jacfwd to 6.3e-14 (coarse 1.3e-14). The element residual equals
+  the S3b one to 7.3e-13.
+- Backward errors are ≤ 1.8e-13, with 0 perturbed pivots. The first PARDISO call includes the
+  analysis: 0.19–0.43 s.
+- Node-to-node variation is up to 1.8×: the same jacfwd tangent measured 3.12 s in another job.
+  Hyperthread siblings are shared between jobs. Ratios within a job are reliable.
+- The first condensation (batched `jnp.linalg.solve`) cost 0.16 s more per tangent than no
+  condensation. The closed-form 4 × 4 inverse removed that overhead.
+- UMFPACK and CHOLMOD were not benchmarked: SuiteSparse is not available on Negishi (no module,
+  no conda), and installing it via micromamba was blocked by the session's permission settings.
+
+**4. Condensation exactness [D].** The condensed step solves the full system to backward error
+5e-16, the same as a direct full solve. Forward agreement with the full solve is 5e-11. It
+cannot be 1e-12: cond(K) ≈ 3e8, and two SuperLU solves of the same full system already differ
+by 8.6e-11. The test checks a backward error ≤ 1e-14 and a forward difference ≤ 1e-9.
+
+**5. Tolerance (coarse, final configuration, job 45900832) [D].** Each rtol was replayed on the
+increments of the rtol = 1e-10 run, with max |ΔP|/P_peak at identical increments in the window:
+
+| rtol | 1e-9 | 1e-8 | 1e-7 | **1e-6** | 1e-5 | 1e-4 |
+|---|---|---|---|---|---|---|
+| max \|ΔP\|/P_peak | 3.0e-9 | 1.1e-8 | 3.2e-7 | **2.3e-6** | 2.3e-5 | 2.9e-3 |
+| iterations | 2293 | 2217 | 2130 | 1896 | 1522 | 1160 |
+
+- **The loosest tolerance meeting ≤ 1e-5 is rtol = 1e-6.** It is proposed as D24.
+- With their own incrementation, runs at rtol ≥ 1e-8 differ from the reference by up to
+  1.5e-3 P_peak in the window. That is not the tolerance: a different cutback pattern moves
+  single-element snap events on this coarse bond.
+- [I] This incrementation-path sensitivity of the coarse deck is relevant to S4, where
+  increments are reduced.
+
+**6. Coarse energy gate (final configuration, rtol 1e-10, job 45901165; `energy_checks.py`
+unchanged) [D].**
+
+| | tslid.fe | ABAQUS (same deck) | tolerance |
+|---|---|---|---|
+| E4 balance (window) | 4.3e-5 | 2.4e-4 | 1 % |
+| E5 (ALLVD + ALLCD)/ALLDMD | 3.0e-4 | 5.1e-4 | 1 % |
+| E6 dissipation slope / (G_c W) − 1 | −1.14e-3 | −1.19e-3 | 2 % |
+| full-record balance | 0.023 | 0.024 | – |
+| ℓ_cz | 2.691 ± 0.033 mm (5.4 el.) | 2.688 ± 0.037 mm | – |
+
+- Pass. ALLDMD is the closed-form inviscid dissipation G_d(δ_max). An earlier trapezoid version
+  gave E4 = 2.0e-3 (`elc2`, superseded); see `tpeel_output.py`.
+
+**7. Production timing (measured, full `sw_s40` runs; jobs 45901170, 45902505, 45902506) [D].**
+
+| run | increments / cutbacks | iterations (all) | wall | split |
+|---|---|---|---|---|
+| ABAQUS (`cpus=1`) | 839 / 9 | 1079 | 2321 s | – |
+| tslid.fe, rtol 1e-10, 1 thread | 842 / 10 | 1827 | 754 s | Hessian 430, solve 209, (E, r) 53, outputs 51, abandoned 38 s |
+| **tslid.fe, rtol 1e-6, 1 thread** | 838 / 8 | 1141 | **490 s = 0.21× ABAQUS** | Hessian 270, solve 124, (E, r) 38, outputs 49 s |
+| tslid.fe, rtol 1e-6, 4 threads | 838 / 8 | 1141 | 335 s | Hessian 172, solve 37 s |
+
+- Accuracy, preliminary for S3d, since the formal comparison script and toggles are S3d's:
+  P_peak +5.7e-6, Δδ_peak −5e-5 mm.
+- In the compare_ld window: max |ΔP| 8.4e-5 P_peak and rms 1.3e-5, for both tolerances.
+  rtol 1e-6 vs 1e-10: 3.0e-6.
+- E4 2.6e-5, E5 7.1e-5, E6 −1.3e-3, the same as ABAQUS's. ℓ_cz 26.9 elements in both.
+- Setup 3.5 s, first call (JIT) 7 s.
+- Projection: none needed; measured directly at 0.21× (1 thread) and 0.14× (4 threads) of
+  ABAQUS's wall time. This is below the 2× threshold, so no joint decision on further
+  optimization is needed.
+
+**Gain.**
+- The coarse damaged T-peel is 10× faster than at S3b and 2.8× faster than ABAQUS on 1 thread.
+- The production reference case runs in 8 min on 1 thread (5.6 min on 4) instead of ABAQUS's
+  39 min, with P within 1e-4 P_peak and identical energy diagnostics.
+- Runs now leave ABAQUS-compatible outputs, so `energy_checks.py` and `compare_ld.py` run
+  unchanged.
+- The path is element-local and has a fixed pattern. That is the structure batched (vmap over
+  parameters) and GPU solves in S4 need.
+
+**Cost / limitations.**
+- About 60 % of the coarse wall time is still abandoned attempts before cutbacks (54 of 91 s).
+  Production has only 8 cutbacks.
+- The increment strategy is ABAQUS-like by design (D22). Changing it is S4's question.
+- Production time is now dominated by the element Hessian, 55 % on 1 thread: AD Hessians of the
+  SVK + enhanced-strain element.
+- The output writer costs ~58 ms per increment at production size, ~10 %.
+- Timings vary up to 1.8× between Negishi nodes. Absolute numbers carry that uncertainty;
+  ratios measured in one job do not.
+- UMFPACK and CHOLMOD are not benchmarked.
+- The divergence check is our rule, not a reproduction of ABAQUS's controls.
+
+**Open items.**
+- User review of D24 (configuration, rtol = 1e-6).
+- S3d: `compare_solvers.py`, the formal `sw_s40` gates, the SVK/Hencky toggle, the location of
+  the S3a traction difference along the bond (D23 item), and then the other four reference
+  cases.

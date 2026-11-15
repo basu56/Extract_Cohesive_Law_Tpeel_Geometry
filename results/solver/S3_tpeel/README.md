@@ -129,3 +129,36 @@ target, δ = 1.6 mm; the same builder as production; 7,306 unknowns):
   abandoned attempts before cutbacks (~456 s of 753 s in the profiled rerun), not line-search
   residuals or Python overhead. The timings above counted converged increments only.
 - First call (JIT) 2.0 s.
+
+## S3c — performance, tolerance, energy gate (coarse) and production timing
+
+Details and all numbers: `docs/SOLVER_LOG.md` (S3c). Formulation: `docs/solver/TPEEL.md` §6.
+Negishi rundir: `/scratch/negishi/basu56/tslid_runs/solver_S3c/` (subdirs `ladder/`, `tol/`, `gate/`,
+`prod/`, `bench2/`). Timed runs are pinned to 1 thread unless stated (`scripts/fe/pin_threads.sh`).
+
+| file | content |
+|---|---|
+| `s3c_ladder_runs.csv` | gain ladder, coarse: one row per configuration and copy (A, B), plus ABAQUS. Options, increments, cutbacks, iterations incl. abandoned attempts, wall split, phase timers, P vs ABAQUS (full record and compare_ld window `_win`) |
+| `s3c_tol_runs.csv` | tolerance study: reference `tol_ref` (rtol 1e-10), replays `tol_<rtol>_rep` on its increments (`max_dP_ref_same_t_win`), and free runs `tol_<rtol>_free` |
+| `s3c_bench.csv` | micro-benchmarks, coarse and production, 1 and 4 threads: tangent (jacfwd / element / condensed), residual, linear solvers (first call incl. analysis, mean of reuse calls, backward error) |
+| `s3c_explore_runs.csv`, `s3c_explore_bench.csv` | exploratory runs: unpinned, or first condensation version. Kept for the record; superseded by the files above |
+| `s3c_energy_gate_coarse.csv`, `s3c_energy_abaqus_coarse.csv` | `energy_checks.py` output, final configuration vs ABAQUS, coarse deck |
+| `s3c_energy_prod.csv`, `s3c_energy_abaqus_prod.csv` | same for production `sw_s40` (rtol 1e-6) |
+| `s3c_prod.csv`, `s3c_prod_pd.npz` | production `sw_s40`: ABAQUS and three tslid.fe runs (rtol 1e-10 / 1e-6, 1 / 4 threads), timings, accuracy; P–Δ curves (float32) |
+| `s3c.png/pdf` | (a) gain ladder; (b) tolerance study; (c) production P difference vs ABAQUS |
+
+Scripts: `scripts/fe/run_s3c*.sh`, `s3_run_tpeel.py`, `s3c_bench.py`, `s3c_summary.py`, `s3c_plot.py`.
+
+**Results [D].**
+- Coarse wall time, 1 thread: 926 s (S3b path) → 657 → 572 → 179 → 102 → **91 s**. ABAQUS takes
+  256 s on the same deck.
+- The steps are: energy Newton, divergence check, element assembly, IM condensation, PARDISO-sym.
+- The response is the same for all steps (window max 0.52 % vs ABAQUS, the coarse snap event).
+- Tolerance: rtol = 1e-6 is the loosest that keeps |ΔP| ≤ 1e-5 P_peak on the same increments
+  (2.3e-6).
+- Coarse energy gate: E4 4.3e-5, E5 3.0e-4, E6 −1.1e-3. All pass; ABAQUS gives 2.4e-4, 5.1e-4,
+  −1.2e-3.
+- Production `sw_s40`: **490 s on 1 thread** (335 s on 4) against ABAQUS 2321 s.
+  - P_peak +5.7e-6; window max |ΔP| 8.4e-5 P_peak, rms 1.3e-5.
+  - E4–E6 equal to ABAQUS's.
+  - Preliminary for S3d.
