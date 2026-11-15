@@ -162,3 +162,35 @@ Scripts: `scripts/fe/run_s3c*.sh`, `s3_run_tpeel.py`, `s3c_bench.py`, `s3c_summa
   - P_peak +5.7e-6; window max |ΔP| 8.4e-5 P_peak, rms 1.3e-5.
   - E4–E6 equal to ABAQUS's.
   - Preliminary for S3d.
+
+## S3d / S3e — production reference cases vs ABAQUS
+
+Details: `docs/SOLVER_LOG.md` (S3d, S3e). Comparison: `src/tslid/analysis/compare_solvers.py`.
+Tables and figure: `scripts/fe/s3de_compare.py`. Negishi rundirs `tslid_runs/solver_S3d/` and
+`solver_S3e/`. Superseded outputs from before the energy-split fix are in `v1/` (identical P).
+
+| file | content |
+|---|---|
+| `s3d_compare.csv` | `sw_s40`: default vs ABAQUS; toggles (Hencky, frame `global`, frame `midsurface`) vs ABAQUS and vs the default. All `compare_solvers.py` fields and gates |
+| `s3e_compare.csv` | `sw_s58`, `sw_s21`, `as_s21_am3`, `as_s21_a7`: default vs ABAQUS |
+| `s3de.png/pdf` | (P − P_ABAQUS)/P_peak vs Δ per case (compare_ld window); `sw_s40` toggles vs the default |
+| `s3d_traction_location.csv/.png` | D23 item: where along the bond the S3a elastic traction difference sits |
+| `s3d_timing.csv` | D25 timing protocol (one job, one node): ABAQUS default deck, ABAQUS with thinned field output, tslid.fe on 1 and 4 threads |
+
+**Results [D]** (default = D24 configuration):
+
+| case | max \|ΔP\|/P_peak | rms | ΔP_peak | Δℓ_cz (el.) | E4–E6 |
+|---|---|---|---|---|---|
+| `sw_s40` | 8.6e-5 | 1.3e-5 | +5.7e-6 | 0.00 | pass |
+| `sw_s58` | 3.6e-4 | 8.5e-5 | −1.8e-5 | +0.01 | pass |
+| `sw_s21` | 4.1e-5 | 7.7e-6 | −2.5e-5 | −0.01 | pass |
+| `as_s21_am3` | 7.0e-5 | 1.1e-5 | −1.5e-5 | 0.00 | pass |
+| `as_s21_a7` | 2.8e-5 | 7.9e-6 | −1.9e-5 | −0.01 | E5 fails in the energy_checks window (end-of-ligament collapse; explained in SOLVER_LOG S3e); passes over the compare_ld window |
+
+All P gates (0.5 %, 0.1 %, one increment, 2 elements) and the 0.1 % target are met in every case.
+- Toggles on `sw_s40`:
+  - Hencky vs SVK: ≤ 2.7e-5 P_peak, so SVK stays.
+  - Cohesive frame `global` = `midsurface` (≤ 2e-9 N apart): 1.2e-4 P_peak from the default
+    corotational frame, and farther from ABAQUS (max 1.5e-4 vs 8.6e-5). Corotational stays.
+- S3a traction difference: at the crack tip (x = 18.0–18.1 mm). 35–46 % of Σ|Δt| lies within
+  2 mm of the tip, none within 2 mm of the bond end.
