@@ -1,6 +1,6 @@
 # Project status (handoff page)
 
-_Last updated: 2026-11-14 (late evening) by Claude Code. Overwrite this page each session._
+_Last updated: 2026-11-14 (night, S0) by Claude Code. Overwrite this page each session._
 
 ## Where we are
 
@@ -79,7 +79,10 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
 - Noise model and P–Δ sampling (RESEARCH_PLAN §7).
 - Figures follow `FIGURE_DESIGN.md` (IJF guide) conventions unless told otherwise.
 
-## Update — Claude Web, 2026-11-14 (merge into the sections above at the next Claude Code session)
-- The α sweep is reviewed. D18 (proposed): P_peak tracks ℓ_cz/H; see the session log `2026-11-14_web_solver-plan`.
-- Differentiable solver on tatva agreed (D19). **Next action for Claude Code: S0** in
-  `docs/solver/S0_S2_INSTRUCTIONS.md`; stop after S0. Gains are logged in `docs/SOLVER_LOG.md` (D20).
+## Differentiable solver (D19, D20) — `docs/SOLVER_LOG.md`
+- Claude Web plan applied (commit ce37d58): S0–S2 instructions `docs/solver/S0_S2_INSTRUCTIONS.md`,
+  D18 (proposed: P_peak tracks ℓ_cz/H), D19–D20 agreed, prototype `scripts/fe/prototype_dcb_tatva.py`.
+- **S0 done** [D]: uv env (Python 3.12.12, jax 0.12.0.1, tatva 0.11.6) on Bell and Negishi, CI green,
+  16/16 tests everywhere; `test_laws` still OK on Python 3.6. Setup: `docs/solver/ENVIRONMENT.md`.
+- **Next: S1 (bulk element, CPE4I-equivalent) — waiting for the user's go-ahead.**
+- Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested.
