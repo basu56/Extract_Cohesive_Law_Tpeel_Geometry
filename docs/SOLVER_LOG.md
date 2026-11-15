@@ -363,3 +363,12 @@ T-peel model now agree with ABAQUS independently, so any S3 mismatch must come f
 **Open items.** S3c: profiling, IM condensation, linear-solver benchmark, tolerance study, and the
 E4–E6 gate on the coarse deck.
 
+
+*Note 2026-11-15 (staggered coarse run).* [D] Negishi job 45868159 (staggered, `global` frame, same
+coarse deck and options) hit its 4 h SLURM time limit without finishing. The monolithic run with
+the same frame took 515 s. The driver writes its CSV/JSON only at the end, so there are no
+increment counts. The only staggered numbers are the partial Bell run in
+`results/solver/S3_tpeel/README.md`: in 150 increments it reached t = 11.88 s, against 17.06 s for
+the monolithic run. Conclusion: on the T-peel, staggered history is at least 28× slower than
+monolithic. It is kept only for cross-checks. S3c will make the driver write records
+incrementally, so a run that times out still leaves data.
