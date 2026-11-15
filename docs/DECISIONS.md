@@ -208,3 +208,38 @@ likely give ℓ_cz > H. They are run anyway, ℓ_cz is measured, and the out-of-
 How ℓ_cz (to the traction-free point) should treat the long low-traction tail of high-α laws
 is an open point.
 Status: **agreed** (sweep design); runner `scripts/phase1/run_alpha_sweep.sh`.
+
+## 2026-11-14 — D18: Interpretation of the σ_c and α sweeps — peak set mainly by ℓ_cz/H
+Evidence: all 21 runs at G_c = 0.40 (σ_c sweep, α = 0; α sweeps at σ_c 40 and 21).
+A quadratic fit of P_peak vs ln(ℓ_cz/H) using the σ_c sweep only predicts the α runs within
+≈ 1.2 % for α ∈ [−3, 3]. The residuals grow to 1.6–5 % at α = 5 and 7 [D, Claude Web
+re-analysis of the summary CSVs]. An energy-weighted mean separation of the law collapses
+the data worse (residuals up to 4.5 %).
+Statement [I]: at fixed G_c, P_peak ≈ f(ℓ_cz/H), with a second-order shape correction that
+grows with tail length. This is why matched-peak (σ_c, α) pairs exist. The process-zone length,
+not the initial softening slope, is the better descriptor: higher α steepens initial softening
+yet lowers P_peak.
+Correction: Claude Web had predicted a shape effect on P_peak smaller than the σ_c effect;
+it is comparable (8.8 % / 13.6 % vs 12.2 %).
+Status: **proposed** (to be tested with a dedicated check, e.g. matched-ℓ_cz pairs).
+
+## 2026-11-14 — D19: Differentiable forward solver on tatva
+Decision (user): build a differentiable T-peel solver as our own layer (`src/tslid/fe/`) on
+**tatva 0.11.6, pinned** (JAX, LGPL-3.0, used as a dependency, not modified). Do not contact
+the tatva authors for now; the cohesive/T-peel layer may become a short contribution.
+ABAQUS stays the reference and truth generator. The development loop is local (laptop,
+Claude Code); production runs are on the cluster.
+The verification ladder is S0 environment → S1 bulk element (CPE4I-equivalent, NLGEOM) →
+S2 cohesive interface (14 single-element runs) → S3 T-peel vs ABAQUS → S4 throughput →
+S5 adjoint gradients. Each step stops for user review.
+Speed is a **hypothesis**. It is measured as throughput (runs/h vs ABAQUS ≈ 30/h,
+licence-limited) and time per gradient, not assumed. The ABAQUS cost is attributed to mesh
+size and output, not to ℓ_cz (STATUS runtime note).
+Then: reproduce Hao, Han & Bahmani (arXiv 2610.33711) as the benchmark.
+Instructions: `docs/solver/S0_S2_INSTRUCTIONS.md`.
+Status: **agreed**.
+
+## 2026-11-14 — D20: Solver log of gains
+Every solver step writes a fixed-format entry in `docs/SOLVER_LOG.md` (built, verification,
+runtime, gain, limitations, open items) and updates its summary table.
+Status: **agreed**.

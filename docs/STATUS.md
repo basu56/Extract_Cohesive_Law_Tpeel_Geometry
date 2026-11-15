@@ -78,3 +78,8 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
 - α range for Phase 1 (now that α < 0 works): e.g. −3 … 7?
 - Noise model and P–Δ sampling (RESEARCH_PLAN §7).
 - Figures follow `FIGURE_DESIGN.md` (IJF guide) conventions unless told otherwise.
+
+## Update — Claude Web, 2026-11-14 (merge into the sections above at the next Claude Code session)
+- The α sweep is reviewed. D18 (proposed): P_peak tracks ℓ_cz/H; see the session log `2026-11-14_web_solver-plan`.
+- Differentiable solver on tatva agreed (D19). **Next action for Claude Code: S0** in
+  `docs/solver/S0_S2_INSTRUCTIONS.md`; stop after S0. Gains are logged in `docs/SOLVER_LOG.md` (D20).
