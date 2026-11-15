@@ -17,7 +17,8 @@ Update this table at each entry.
 | S1 bulk element | **done**, 1 flagged item 2026-11-14 | Q4IM = CPE4I to 1e-8 (linear); NLGEOM v, M ≤ 4e-5; u_tip 1.25 % SVK / 0.30 % Hencky (own value) | ny=20 linear 1.8 s/solve; NL 2.6 s/incr (ABAQUS 50 s total) | locking-free bulk element matching CPE4I; constitutive gap quantified |
 | S2 cohesive interface | **done** 2026-11-14 | 20 inviscid COH2D4 runs ≤ 6.8e-8 σ_c; viscous ≤ 4.8e-8 until D = 1; COH2D4 = nodal quadrature | 2000-increment element history ~0.5 s | ABAQUS cohesive behaviour reproduced exactly, with exact gradients in (K0, σ_c, G_c, α) |
 | S3 T-peel forward vs ABAQUS | **S3a–S3e done** 2026-11-15 (S3a gate revised to 5e-5, D23); **1 explained E5 failure (as_s21_a7, energy_checks window at the end-of-ligament collapse)**; stopped for review | linear T-peel = ABAQUS to 3e-8; 5 reference cases: max \|ΔP\| ≤ 3.6e-4 P_peak, ΔP_peak ≤ 2.5e-5, ℓ_cz ≤ 0.01 el.; E4–E6 = ABAQUS over the compare_ld window | sw_s40, one job/node: 532 s (1 thread) and 383 s (4) vs ABAQUS 2292 s (0.23× / 0.17×) | ABAQUS-equivalent T-peel forward solve at < 1/4 of its cost, element-local and differentiable |
-| S4 throughput (batched / GPU) | not started | | | |
+| S4a sweeps vs ABAQUS (D25) | **done** 2026-11-15; stopped for review | 23/23 runs (21 laws) pass load gates, max \|ΔP\| ≤ 5.5e-4 P_peak; D18 pair differences agree to ≤ 1.05e-4 P_peak (≤ 0.4 % of signal); E6 of as_s21_a7 fails identically in both solvers (D26 window) | 318–986 s per run, 4 threads | Phase-1 G_c 0.4 dataset reproduced by the differentiable solver |
+| S4b throughput (batched / GPU, increments) | deferred until after S5 (D25) | | | |
 | S5 gradients (adjoint) | not started | | | |
 
 Reference ABAQUS costs:
@@ -719,3 +720,78 @@ of them our P–Δ matches ABAQUS to ≤ 3.6e-4 P_peak and P_peak to ≤ 2.5e-5.
   front at L − 15 mm) for both solvers, or end the window before the first frame of the
   end-of-ligament collapse.
 - Then S4a: the 21 σ_c and α sweep runs against ABAQUS (D25).
+
+*Note 2026-11-15 (D26, after the S3d/S3e review).*
+- `energy_checks.py --window front` evaluates E4–E6 up to the first frame where the σ_c front
+  passes L − 15 mm, the end of the compare_ld load window. The default (`tip`) is unchanged: the
+  new code reproduces the old one bit for bit on all 23 ABAQUS sweep runs (598 values).
+- The archived `sweep_energy_summary.csv` / `alpha_energy_summary.csv` differ from both at ~1e-8
+  relative in ℓ_cz. They were made in another Python/numpy environment.
+- Five S3d/S3e cases with the D26 window [D]:
+  - E4 ≤ 3.8e-5 and E5 = ABAQUS's within 5 % in all five, so the `as_s21_a7` E5 failure is
+    resolved (4.7e-5 for both).
+  - E6 for `as_s21_a7` becomes −0.0212 in both solvers (fails the 2 % tolerance identically): the
+    shorter steady range, 366 vs 450 frames, with a 14.5 mm cohesive zone.
+
+## S4a — σ_c and α sweeps at G_c = 0.4 vs ABAQUS — 2026-11-15 — commits 7bca8c8…(S4a commit)
+
+Scope (D25, D26): all sweep runs at G_c = 0.4 with tslid.fe (D24 defaults, 4 threads), each against
+its ABAQUS run with `compare_solvers.py` (load gates + D26-windowed E4–E6). That is 23 runs of 21
+laws (`as_s40_a0` and `as_s21_a0` repeat `sw_s40` and `sw_s21`). Plus the D18 matched-peak pairs
+in both solvers. Rundir `/scratch/negishi/basu56/tslid_runs/solver_S4a/`. Results
+`results/solver/S4a_sweeps/` (README with the full tables).
+
+**Built.** `scripts/fe/s4a_compare.py`; `energy_checks.py --window front` and its use in
+`compare_solvers.py` (D26).
+
+**Verification [D].**
+- **Load gates: 23/23 pass, 0.1 % target met in all.**
+  - max |ΔP|/P_peak: 2.8e-5 (`as_s21_a7`) … 5.5e-4 (`as_s40_am3`).
+  - The largest values are where ℓ_cz is shortest: σ_c 58 (3.6e-4), 55 (2.1e-4), and α −3/−1.5
+    at σ_c 40 (5.5e-4 / 2.2e-4). Single-element snaps are largest there.
+  - |ΔP_peak| ≤ 8.3e-5; Δδ_peak −4e-5 mm (increment 2e-3); |Δℓ_cz| ≤ 0.04 elements; elastic slope
+    ≤ 4.4e-5.
+- **Energy (D26 window):**
+  - E4 ≤ 4.7e-5 (ABAQUS ≤ 3.5e-5) and E5 ≤ 9.3e-5 (ours / ABAQUS within 7 %) in all 23.
+  - E6: ours and ABAQUS agree to ≤ 1e-4 absolute in every run.
+  - **E6 fails in 1/23, `as_s21_a7`, for both solvers identically (−0.0212 vs tolerance 0.02).**
+  - |E6| grows with α at fixed σ_c in both solvers: −0.0029 … −0.0212 at σ_c 21, −0.0009 …
+    −0.0090 at σ_c 40. [I] That is the steady-propagation fit of `energy_checks.py` for long tails
+    in a shortened window, not a solver property.
+- **D18 matched-peak pairs.** Pre-peak pair difference (P_other − P_ref)/P_peak over 0 ≤ δ ≤ the
+  later peak:
+  - Signals: 1.69 / 5.12 / 5.00 / 3.59 / 2.50 % (ABAQUS) and 1.69 / 5.12 / 5.00 / 3.59 / 2.50 %
+    (tslid.fe), maxima at the same δ (0.146–0.154 mm).
+  - The two solvers' pair differences agree to ≤ 3.1e-5 P_peak for four pairs and 1.05e-4 for
+    σ_c 40 α 3 vs σ_c 30 α 0. That is ≤ 0.06 % and 0.42 % of the signal; the largest is a
+    single-element snap at δ ≈ 0.135 mm.
+  - **The identifiability-relevant information (the 1.7–5 % pre-peak differences) is reproduced
+    by tslid.fe to ≤ 0.4 % of its size.**
+- **Duplicate laws:** ABAQUS bit-identical. tslid.fe 1.8e-10 / 1.9e-10 P_peak with identical
+  increments. [H] Floating-point reduction order in multithreaded PARDISO/XLA, i.e. not bitwise
+  deterministic.
+
+**Runtime** (4 threads, up to 16 concurrent jobs, indicative): 318–986 s per run.
+- The longest are `as_s40_am3` (890 increments, 25 cutbacks) and `sw_s58` (875, 25).
+- ABAQUS on the same runs: ~36–56 min each (1 CPU).
+- PARDISO: 0 perturbed pivots in all 23.
+
+**Gain.**
+- The entire Phase-1 G_c = 0.4 dataset (σ_c 21–58, α −3…7) is reproduced by the differentiable
+  solver to ≤ 5.5e-4 P_peak, with the same cohesive-zone lengths and energy diagnostics.
+- The matched-peak pair structure that motivates the identifiability study (D18) is the same in
+  both solvers. tslid.fe can therefore replace ABAQUS as the forward model for S5 (gradients) and
+  for identifiability work, with a solver-difference floor (≤ 5.5e-4 whole-curve, ≤ 1e-4 on pair
+  differences) below the 0.04 % mesh / increment floor of D16 in most runs.
+
+**Cost / limitations.**
+- E6 fails for `as_s21_a7` in both solvers in the D26 window (it passes in the default window);
+  this needs a user decision.
+- tslid.fe is not bitwise deterministic across runs (1e-10).
+- Runtime numbers here are cross-job; the publishable ratio is S3d's.
+
+**Open items (user).**
+- E6 for long-tail laws in the D26 window. Options: accept as a case property (it fails
+  identically in ABAQUS); use the default window for E6 only; or define E6's steady range by the
+  traction-free tip regardless of the window.
+- S5: `apply_solver_S5.sh` arrived in the repo root during S4a; not applied, waiting for the user.

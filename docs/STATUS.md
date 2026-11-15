@@ -1,6 +1,6 @@
 # Project status (handoff page)
 
-_Last updated: 2026-11-15 (S3d/S3e) by Claude Code. Overwrite this page each session._
+_Last updated: 2026-11-15 (S4a) by Claude Code. Overwrite this page each session._
 
 ## Where we are
 
@@ -144,11 +144,26 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
   - Over the compare_ld window, E4/E5 pass in all five cases and E5 equals ABAQUS's within 3 %.
 - Energy split in `tpeel_output.py` corrected (viscous-overstress split; the S3c split
   double-counted a lagging D_v). All S3d/S3e runs repeated with it.
-- **Stopped for user review after S3e** (D25).
+- User review of S3d/S3e: **D26**:
+  - E4–E6 are computed in the load-comparison window (`energy_checks.py --window front`; the
+    default is unchanged, verified bit for bit).
+  - S3 accepted.
+  - S4a defined.
+  - S5 waits for the Claude Web instructions.
+- **S4a done** [D] (`results/solver/S4a_sweeps/`, SOLVER_LOG S4a):
+  - **23/23 sweep runs (21 laws, G_c 0.4) pass all load gates and the 0.1 % target** (max |ΔP|
+    ≤ 5.5e-4 P_peak, ΔP_peak ≤ 8.3e-5, ℓ_cz ≤ 0.04 el.).
+  - E4/E5 pass in all; E6 agrees with ABAQUS to ≤ 1e-4.
+  - **E6 fails for `as_s21_a7` identically in both solvers (−0.0212)** in the D26 window.
+  - D18 matched-peak pairs: the pair differences (1.7–5.1 % of P_peak) agree between solvers to
+    ≤ 1.05e-4 P_peak (≤ 0.4 % of the signal).
+  - Duplicate laws: ABAQUS bit-identical, tslid.fe 1e-10.
+- **Stopped for user review after S4a** (D26).
 - **Next:**
-  - User: decide the E4/E5 window for long-tail laws. Proposal: compare_ld window (σ_c front at
-    L − 15 mm) for both solvers, or end the window before the end-of-ligament collapse.
-  - Then S4a: rerun the 21 σ_c and α sweep runs with tslid.fe and compare each against ABAQUS
-    (`compare_solvers.py`). Then S5 (gradients).
+  - User: decide on E6 for long-tail laws in the D26 window (accept as a case property, use the
+    default window for E6, or define the E6 steady range by the tip).
+  - S5: `apply_solver_S5.sh` / `S5_INSTRUCTIONS.md` arrived (repo root); not applied, waiting for
+    the go-ahead.
+  - S4b (batching, GPU, increments) after S5.
 - Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested; ABAQUS manual citations
   unverified (user checking 3DS access).

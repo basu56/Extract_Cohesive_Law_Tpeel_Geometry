@@ -1,0 +1,5 @@
+job_a,job_b,solver,identical_delta,max_dP
+sw_s40,as_s40_a0,abaqus,True,0
+sw_s40,as_s40_a0,tslid.fe,True,1.7791e-10
+sw_s21,as_s21_a0,abaqus,True,0
+sw_s21,as_s21_a0,tslid.fe,True,1.94288e-10
