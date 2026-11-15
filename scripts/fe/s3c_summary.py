@@ -37,67 +37,68 @@ def rd(p):
     return np.genfromtxt(p, delimiter=",", names=True)
 
 
-ab = rd(os.path.join(RUN, "c_s40_response.csv"))
-Ppk = ab["P"].max()
-d_end = ab["delta"].max()
-grid = np.linspace(0.0, d_end, 4000)
-pa = np.interp(grid, ab["delta"], ab["P"])
-msg = open(os.path.join(RUN, "c_s40.msg")).read()
-num = lambda pat: int(re.findall(pat, msg)[-1])
-rows = [dict(tag="abaqus", increments=num(r"TOTAL OF\s+(\d+)\s+INCREMENTS"), cutbacks=num(r"(\d+)\s+CUTBACKS"),
-             iterations_all=num(r"(\d+)\s+ITERATIONS INCLUDING"),
-             wall=float(re.findall(r"WALLCLOCK TIME \(SEC\) =\s+(\d+)", msg)[-1]), P_peak=Ppk, complete=True)]
-d_win = cld_load(RUN, "c_s40")["d_end"]          # compare_ld.py window end (sigma_c front at L - 15 mm)
-win = grid <= d_win
-print("window end (ABAQUS coarse, compare_ld.py): delta = %.4f mm" % d_win)
-rows[0]["d_window"] = d_win
-ref = None
-p = os.path.join(RUN, f"c_s40_{REF}_jax.csv")
-if os.path.exists(p):
-    d = rd(p)
-    ref = np.interp(grid, d["delta"], d["P"])
-for js in sorted(glob.glob(os.path.join(RUN, "c_s40_*_jax.json"))):
-    s = json.load(open(js))
-    d = rd(js[:-5] + ".csv")
-    reach = d["delta"].max()
-    g = grid <= reach
-    P = np.interp(grid[g], d["delta"], d["P"])
-    e = (P - pa[g]) / Ppk
-    k = int(np.argmax(d["P"]))
-    row = dict(tag=s["tag"], newton=s.get("newton", "residual"), assembly=s.get("assembly", "jacfwd"),
-               condense=s.get("condense", False), linsolve=s.get("linsolve", "superlu"), rtol=s["rtol"],
-               diverge_after=s.get("diverge_after", 0), schedule=os.path.basename(s.get("schedule") or ""),
-               complete=s["complete"], t_reached=s.get("t_reached"),
-               increments=s["increments"], cutbacks=s["cutbacks"], newton_total=s["newton_total"],
-               iterations_all=s.get("iterations_all"), ls_total=s["ls_total"],
-               wall=s["wall_run"], t_increments=s.get("t_increments"), failed_wall=s.get("failed_wall"),
-               wall_first_call=s.get("wall_first_call"), **{"T_" + k: v for k, v in s.get("timers", {}).items()},
-               P_peak=float(d["P"][k]), err_P_peak=float((d["P"][k] - Ppk) / Ppk),
-               max_dP_abq=float(np.abs(e).max()), rms_dP_abq=float(np.sqrt(np.mean(e ** 2))),
-               max_dP_abq_win=float(np.abs(e[win[g]]).max()), rms_dP_abq_win=float(np.sqrt(np.mean(e[win[g]] ** 2))))
-    if ref is not None:
-        er = (P - ref[g]) / Ppk
-        row.update(max_dP_ref=float(np.abs(er).max()), rms_dP_ref=float(np.sqrt(np.mean(er ** 2))),
-                   max_dP_ref_win=float(np.abs(er[win[g]]).max()))
-        if s.get("schedule"):                                  # same increments: compare at equal times
-            r0 = {round(t, 10): pp for t, pp in zip(*[rd(os.path.join(RUN, os.path.basename(s["schedule"])))[c]
-                                                    for c in ("time", "P")])}
-            same = [(abs(pp - r0[round(t, 10)]), dd) for t, pp, dd in zip(d["time"], d["P"], d["delta"])
-                    if round(t, 10) in r0]
-            row["max_dP_ref_same_t"] = float(max(x for x, _ in same) / Ppk) if same else np.nan
-            row["max_dP_ref_same_t_win"] = float(max(x for x, dd in same if dd <= d_win) / Ppk) if same else np.nan
-    rows.append(row)
-keys = []
-for r in rows:
-    keys += [k for k in r if k not in keys]
-with open(os.path.join(OUT, PFX + "_runs.csv"), "w", newline="") as fh:
-    w = csv.DictWriter(fh, fieldnames=keys)
-    w.writeheader()
+if os.path.exists(os.path.join(RUN, "c_s40_response.csv")):          # runs table (needs the ABAQUS run)
+    ab = rd(os.path.join(RUN, "c_s40_response.csv"))
+    Ppk = ab["P"].max()
+    d_end = ab["delta"].max()
+    grid = np.linspace(0.0, d_end, 4000)
+    pa = np.interp(grid, ab["delta"], ab["P"])
+    msg = open(os.path.join(RUN, "c_s40.msg")).read()
+    num = lambda pat: int(re.findall(pat, msg)[-1])
+    rows = [dict(tag="abaqus", increments=num(r"TOTAL OF\s+(\d+)\s+INCREMENTS"), cutbacks=num(r"(\d+)\s+CUTBACKS"),
+                 iterations_all=num(r"(\d+)\s+ITERATIONS INCLUDING"),
+                 wall=float(re.findall(r"WALLCLOCK TIME \(SEC\) =\s+(\d+)", msg)[-1]), P_peak=Ppk, complete=True)]
+    d_win = cld_load(RUN, "c_s40")["d_end"]          # compare_ld.py window end (sigma_c front at L - 15 mm)
+    win = grid <= d_win
+    print("window end (ABAQUS coarse, compare_ld.py): delta = %.4f mm" % d_win)
+    rows[0]["d_window"] = d_win
+    ref = None
+    p = os.path.join(RUN, f"c_s40_{REF}_jax.csv")
+    if os.path.exists(p):
+        d = rd(p)
+        ref = np.interp(grid, d["delta"], d["P"])
+    for js in sorted(glob.glob(os.path.join(RUN, "c_s40_*_jax.json"))):
+        s = json.load(open(js))
+        d = rd(js[:-5] + ".csv")
+        reach = d["delta"].max()
+        g = grid <= reach
+        P = np.interp(grid[g], d["delta"], d["P"])
+        e = (P - pa[g]) / Ppk
+        k = int(np.argmax(d["P"]))
+        row = dict(tag=s["tag"], newton=s.get("newton", "residual"), assembly=s.get("assembly", "jacfwd"),
+                   condense=s.get("condense", False), linsolve=s.get("linsolve", "superlu"), rtol=s["rtol"],
+                   diverge_after=s.get("diverge_after", 0), schedule=os.path.basename(s.get("schedule") or ""),
+                   complete=s["complete"], t_reached=s.get("t_reached"),
+                   increments=s["increments"], cutbacks=s["cutbacks"], newton_total=s["newton_total"],
+                   iterations_all=s.get("iterations_all"), ls_total=s["ls_total"],
+                   wall=s["wall_run"], t_increments=s.get("t_increments"), failed_wall=s.get("failed_wall"),
+                   wall_first_call=s.get("wall_first_call"), **{"T_" + k: v for k, v in s.get("timers", {}).items()},
+                   P_peak=float(d["P"][k]), err_P_peak=float((d["P"][k] - Ppk) / Ppk),
+                   max_dP_abq=float(np.abs(e).max()), rms_dP_abq=float(np.sqrt(np.mean(e ** 2))),
+                   max_dP_abq_win=float(np.abs(e[win[g]]).max()), rms_dP_abq_win=float(np.sqrt(np.mean(e[win[g]] ** 2))))
+        if ref is not None:
+            er = (P - ref[g]) / Ppk
+            row.update(max_dP_ref=float(np.abs(er).max()), rms_dP_ref=float(np.sqrt(np.mean(er ** 2))),
+                       max_dP_ref_win=float(np.abs(er[win[g]]).max()))
+            if s.get("schedule"):                                  # same increments: compare at equal times
+                r0 = {round(t, 10): pp for t, pp in zip(*[rd(os.path.join(RUN, os.path.basename(s["schedule"])))[c]
+                                                        for c in ("time", "P")])}
+                same = [(abs(pp - r0[round(t, 10)]), dd) for t, pp, dd in zip(d["time"], d["P"], d["delta"])
+                        if round(t, 10) in r0]
+                row["max_dP_ref_same_t"] = float(max(x for x, _ in same) / Ppk) if same else np.nan
+                row["max_dP_ref_same_t_win"] = float(max(x for x, dd in same if dd <= d_win) / Ppk) if same else np.nan
+        rows.append(row)
+    keys = []
     for r in rows:
-        w.writerow({k: (f"{v:.6g}" if isinstance(v, float) else v) for k, v in r.items()})
-for r in rows:
-    print({k: (round(v, 4) if isinstance(v, float) and abs(v) > 1e-3 else v) for k, v in r.items()
-           if not k.startswith("T_")})
+        keys += [k for k in r if k not in keys]
+    with open(os.path.join(OUT, PFX + "_runs.csv"), "w", newline="") as fh:
+        w = csv.DictWriter(fh, fieldnames=keys)
+        w.writeheader()
+        for r in rows:
+            w.writerow({k: (f"{v:.6g}" if isinstance(v, float) else v) for k, v in r.items()})
+    for r in rows:
+        print({k: (round(v, 4) if isinstance(v, float) and abs(v) > 1e-3 else v) for k, v in r.items()
+               if not k.startswith("T_")})
 
 brows = []
 for js in sorted(glob.glob(os.path.join(RUN, "bench_*_t*.json"))):
