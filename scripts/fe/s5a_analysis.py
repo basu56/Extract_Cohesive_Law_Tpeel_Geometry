@@ -232,26 +232,33 @@ ax[0].set(xlabel="relative FD step h", ylabel=r"$\|S_{dir} - S_{FD}\|_2 / \|S_{F
 ax[0].legend(frameon=False, fontsize=8)
 if "b1" in S:
     b1 = S["b1"]
+    w = b1["delta"] <= d_end
     for j, nm in enumerate(NAMES):
-        ax[1].plot(b1["delta"], b1["dP"][:, j], color=C[j], lw=1.1, label=nm)
-        fd = fdcurves.get((nm, "1e-4"))
+        ax[1].plot(b1["delta"][w], b1["dP"][w, j], color=C[j], lw=0.8, label=nm)
+        fd = fdcurves.get((nm, "1e-6"))
         if fd is not None:
             sel = slice(None, None, max(1, len(fd) // 30))
             ax[1].plot(b1["delta"][sel], fd[sel], "o", color=C[j], mfc="w", ms=3.5)
-    ax[1].axvline(d_end, color="0.6", ls="--", lw=0.8)
+    lo, hi = np.nanpercentile(b1["dP"][w], [1, 99])
+    ax[1].set_ylim(lo - 0.1 * (hi - lo), hi + 0.1 * (hi - lo))
     ax[1].set(xlabel=r"$\Delta$ (mm)", ylabel=r"$dP/d\theta$ (N)",
-              title="(b) coarse: sensitivities (lines), FD h = 1e-4 (markers)")
+              title="(b) coarse, window: sensitivities (lines), FD h = 1e-6 (markers)\n"
+                    "y clipped to 1-99 %: element-failure spikes off scale")
     ax[1].legend(frameon=False, fontsize=8)
 if os.path.exists(prod):
     z = np.load(prod)
+    w = z["delta"] <= load(os.path.join(ROOT, "phase1a_sigc_sweep"), "sw_s40")["d_end"]
     a2 = ax[2].twinx()
-    a2.plot(z["delta"], z["P"], color="0.75", lw=2.0)
+    a2.plot(z["delta"][w], z["P"][w], color="0.75", lw=2.0)
     a2.set_ylabel("P (N)", color="0.5")
     for j, nm in enumerate(NAMES):
-        ax[2].plot(z["delta"], z["dP"][:, j], color=C[j], lw=1.1, label=nm)
+        ax[2].plot(z["delta"][w], z["dP"][w, j], color=C[j], lw=0.8, label=nm)
+    lo, hi = np.nanpercentile(z["dP"][w], [1, 99])
+    ax[2].set_ylim(lo - 0.1 * (hi - lo), hi + 0.1 * (hi - lo))
     ax[2].axvspan(0.10, 0.22, color="0.92", zorder=0)
     ax[2].set(xlabel=r"$\Delta$ (mm)", ylabel=r"$dP/d\theta$ (N)",
-              title="(c) production sw_s40, rtol 1e-6\n(grey band: D18 pre-peak window; grey line P)")
+              title="(c) production sw_s40, rtol 1e-6, window (y clipped 1-99 %)\n"
+                    "grey band: D18 pre-peak window; grey line P")
     ax[2].legend(frameon=False, fontsize=8, loc="upper right")
 fig.tight_layout()
 for ext in ("png", "pdf"):
