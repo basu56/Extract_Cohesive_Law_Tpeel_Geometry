@@ -212,11 +212,15 @@ def newton_energy(model, q, h, opt, log=None):
 
 
 def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_increments=10 ** 6,
-        on_increment=None, newton=None):
+        on_increment=None, newton=None, schedule=None):
     """Integrate the step 0 -> T.  ``record(model, t, q, hist, h_used, r)`` returns a dict stored per
     converged increment (t = 0 included).  ``on_increment(row, inc_log)`` is called right after each
     record (inc_log None for t = 0), so a driver can write results as the run goes (S3c).
-    ``newton(model, q, h, opt, log)`` replaces newton_ls (same return contract).  Returns RunResult."""
+    ``newton(model, q, h, opt, log)`` replaces newton_ls (same return contract).
+    ``schedule``: increasing end times of the increments (e.g. the converged times of another run);
+    each increment ends on the next scheduled time (a failed attempt is cut back as usual and the
+    increment then continues to the same scheduled time).  Used by the S3c tolerance study, so that
+    two tolerances are compared on identical increments.  Returns RunResult."""
     newton = newton or newton_ls
     opt = opt or SolverOptions()
     out = RunResult()
@@ -231,7 +235,15 @@ def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_i
             on_increment(out.records[-1], None)
     t, dt, q_prev, dt_prev, easy, n_inc = 0.0, dt0, None, None, 0, 0
     cut_here, f_its, f_wall, f_div = 0, 0, 0.0, 0
+    sched = list(schedule) if schedule is not None else None
     while t < T * (1 - 1e-12) and n_inc < max_increments:
+        if sched is not None:
+            while sched and sched[0] <= t * (1 + 1e-14):
+                sched.pop(0)
+            target = sched[0] if sched else T
+            dt = min(dt, target - t) if cut_here else target - t
+            if target - t - dt < 1e-9 * T:
+                dt = target - t
         dt = min(dt, T - t)
         if T - t - dt < 1e-9 * T:
             dt = T - t

@@ -46,6 +46,7 @@ ap.add_argument("--condense", action="store_true", help="condense the incompatib
 ap.add_argument("--linsolve", default="superlu", choices=sorted(SOLVERS))
 ap.add_argument("--no-abaqus-out", action="store_true",
                 help="skip <job>_<tag>_response.csv / _profiles.npz / .json / .sta (tpeel_output.py)")
+ap.add_argument("--schedule", default=None, help="CSV of a previous run: reuse its increment end times")
 ap.add_argument("--diverge-after", type=int, default=0, help="newton_energy divergence check (0 = off)")
 ap.add_argument("--cprofile", action="store_true", help="also write <job>_<tag>_cprofile.txt (top 40 by cumtime)")
 a = ap.parse_args()
@@ -122,7 +123,7 @@ def summary(complete, res=None):
              failed_iters=int(sum(l.failed_iters for l in L)), failed_wall=float(sum(l.failed_wall for l in L)),
              diverged=int(sum(l.diverged for l in L)),
              iterations_all=int(sum(l.iterations + l.failed_iters for l in L)),
-             diverge_after=a.diverge_after,
+             diverge_after=a.diverge_after, schedule=a.schedule,
              wall_run=res.wall if res else time.perf_counter() - state["t_start"], wall_setup=t_setup,
              wall_first_call=t_jit,
              t_tangent=float(sum(l.t_tangent for l in L)), t_solve=float(sum(l.t_solve for l in L)),
@@ -135,7 +136,8 @@ def summary(complete, res=None):
              jit_cache={**m.jit_cache_sizes(), **(M.jit_cache_sizes() if M is not m else {})},
              P_peak=float(max(r["P"] for r in rows)) if rows else None,
              delta_peak=float(max(rows, key=lambda r: r["P"])["delta"]) if rows else None,
-             threads=os.environ.get("XLA_FLAGS", ""), omp=os.environ.get("OMP_NUM_THREADS", ""))
+             threads=os.environ.get("XLA_FLAGS", ""), omp=os.environ.get("OMP_NUM_THREADS", ""),
+             affinity=len(os.sched_getaffinity(0)))
     with open(jpath + ".tmp", "w") as fh:
         json.dump(s, fh, indent=2)
     os.replace(jpath + ".tmp", jpath)
@@ -174,7 +176,9 @@ if a.cprofile:
     prof.enable()
 res = run(M, st["T"], st["dt0"], st["dtmin"], st["dtmax"], opt, record=rec, verbose=a.verbose,
           max_increments=a.max_increments, on_increment=on_inc,
-          newton=newton_energy if a.newton == "energy" else newton_ls)
+          newton=newton_energy if a.newton == "energy" else newton_ls,
+          schedule=None if a.schedule is None else
+          [float(r["time"]) for r in csv.DictReader(open(a.schedule)) if float(r["time"]) > 0])
 if a.cprofile:
     prof.disable()
     buf = io.StringIO()
