@@ -16,5 +16,5 @@ source scripts/fe/pin_threads.sh "${THREADS:-0}"
 echo "$(date) repo $(git -C "$REPO" rev-parse --short HEAD) host $(hostname)"
 export UV_CACHE_DIR=/scratch/negishi/basu56/.uv-cache UV_PYTHON_INSTALL_DIR=/scratch/negishi/basu56/.uv-python
 $PIN $HOME/.local/bin/uv run --locked --extra fe python scripts/fe/s3_run_tpeel.py "$DIR/$J.inp" "$DIR" --tag "$TAG" \
-    --newton energy --assembly element --condense --diverge-after 4 --linsolve pardiso_sym --summary-every 20 "$@" | tail -60
+    --summary-every 20 "$@" | tail -60          # D24 defaults (s3_run_tpeel.py)
 echo "$(date) done"
