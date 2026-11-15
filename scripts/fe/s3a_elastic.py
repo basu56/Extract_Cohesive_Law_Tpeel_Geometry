@@ -18,14 +18,15 @@ import jax.numpy as jnp
 import numpy as np
 
 import tslid.fe  # noqa: F401
-from tslid.fe.tpeel import TPeelModel, newton
+from tslid.fe.incremental import SolverOptions, newton_ls
+from tslid.fe.tpeel import TPeelModel
 
 ap = argparse.ArgumentParser()
 ap.add_argument('deck')
 ap.add_argument('outdir')
 ap.add_argument('--kinematics', default='svk')
-ap.add_argument('--frame', default='global')
-ap.add_argument('--coupling', default='finite')
+ap.add_argument('--frame', default=None)
+ap.add_argument('--coupling', default=None)
 ap.add_argument('--n-inc', type=int, default=None)
 ap.add_argument('--tag', default=None)
 a = ap.parse_args()
@@ -37,20 +38,24 @@ m = TPeelModel(a.deck, kinematics=a.kinematics, frame=a.frame, coupling=a.coupli
 t_setup = time.perf_counter() - t0
 st = m.deck.step['static']
 n_inc = a.n_inc or int(round(st['T'] / st['dtmax']))
-print('deck %s: n_q %d free %d colours %d law %s, setup %.1f s, %d increments'
-      % (a.deck, m.n_q, len(m.free), m.n_colors, m.law_kind, t_setup, n_inc), flush=True)
+print('deck %s: n_q %d free %d colours %d law %s frame %s coupling %s kinematics %s, setup %.1f s, %d increments'
+      % (a.deck, m.n_q, len(m.free), m.n_colors, m.law_kind, m.frame, m.coupling, a.kinematics, t_setup, n_inc), flush=True)
+opt = SolverOptions(rtol=1e-12, max_iter=40)
 D = m.frozen_args(m.zero_history(), 1.0)          # elastic law: history unused
 q = m.apply_bc(m.zero_q(), 0.0)
+q_prev = q_conv = q.copy()
 rows, Us, Tn, Ts = [], [], [], []
 for k in range(1, n_inc + 1):
     lam = k / n_inc
-    q = m.apply_bc(q, lam)
+    q = m.apply_bc(q + (q - q_prev) if k > 1 else q, lam)        # linear extrapolation (ABAQUS default)
+    q_prev = q_conv
     t1 = time.perf_counter()
-    q, info = newton(m, q, D, log=print)
+    q, info = newton_ls(m, q, D, opt, log=print)
+    q_conv = q.copy()
     wall = time.perf_counter() - t1
-    o = m.outputs(q, D)
+    o = m.outputs(q, D, r=info['r'])
     o.update(lam=lam, time=lam * st['T'], energy=m.energy(q, D), iterations=info['iterations'],
-             converged=info['converged'], wall=wall, t_tangent=info['t_tangent'], t_solve=info['t_solve'])
+             converged=info['converged'], ls=info['ls_steps'], wall=wall, t_tangent=info['t_tangent'], t_solve=info['t_solve'])
     rows.append(o)
     Us.append(m.lift(q)[: 2 * m.n_nodes].reshape(-1, 2))
     tn, ts = m.coh.tractions(jnp.asarray(Us[-1]), m.zero_history(), m.K0)

@@ -48,9 +48,12 @@ class TPeelModel:
         deck: a Deck (inp_import.read_inp) or a path to the .inp.
         kinematics: bulk energy, "svk" (default, D21 update), "hencky" or "linear".
         kind: "Q4IM" (CPE4I) or "Q4".
-        quadrature, frame: CohesiveInterface options ("nodal" = COH2D4, "global" frame).
-        coupling: "finite" (R(theta), NLGEOM = YES) or "linear" (u_s = u_RP + theta e3 x dX,
-            what ABAQUS uses with NLGEOM = NO).
+        quadrature: "nodal" (COH2D4, S2 probe) or "gauss".
+        frame: cohesive separation kinematics (interface.py).  None (default) = what COH2D4 does
+            for the deck's NLGEOM setting [D, S3a probes]: "corotational" (YES) or
+            "corotational_linear" (NO).
+        coupling: "finite" (R(theta)) or "linear" (u_s = u_RP + theta e3 x dX).  None (default) =
+            "finite" for NLGEOM = YES, "linear" for NO.
         history: "monolithic" (S3b default: incremental potential at the frozen history of the
             previous increment, one Newton solve per increment) or "staggered" (S2: stiffness
             damage frozen, solve / update history / repeat).
@@ -59,12 +62,15 @@ class TPeelModel:
     ``frozen_args(hist, dt)``: (dmax_n, Dv_n, a, b) for monolithic, (D_stiffness,) for staggered.
     """
 
-    def __init__(self, deck, kinematics="svk", kind="Q4IM", quadrature="nodal", frame="global",
-                 coupling="finite", history="monolithic"):
-        self.coupling = coupling
-        self.history = history
+    def __init__(self, deck, kinematics="svk", kind="Q4IM", quadrature="nodal", frame=None,
+                 coupling=None, history="monolithic"):
         self.deck = read_inp(deck) if isinstance(deck, str) else deck
         d = self.deck
+        nl = d.step.get("nlgeom", True)
+        frame = frame or ("corotational" if nl else "corotational_linear")
+        self.coupling = coupling or ("finite" if nl else "linear")
+        self.history = history
+        self.frame = frame
         self.coords = d.coords
         self.n_nodes = len(d.coords)
         conn, self.elset_of = d.bulk_elements()

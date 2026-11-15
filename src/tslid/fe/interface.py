@@ -7,9 +7,18 @@ The bond line is a chain of matched node pairs: lower face nodes ``bot[k]`` and 
 Constitutive thickness 1, so the separation equals the displacement jump [[u]] = u_top - u_bot
 (the geometric gap, 0.4 mm in the T-peel, only sets the initial geometry).
 
-Separations at a quadrature point: delta_n = [[u]] . n, delta_s = [[u]] . t, with (t, n) the
-reference (global) frame of the segment (``frame="global"``, S2), or the deformed mid-surface
-frame (``frame="midsurface"``; what COH2D4 does under NLGEOM [H]; to be tested in S3).
+Separations at a quadrature point (node pair k, gap vector G_k = X_top,k - X_bot,k, current gap
+d_k = x_top,k - x_bot,k = G_k + [[u]]_k), selected by ``frame``:
+    "corotational" (S3a default; COH2D4 under NLGEOM [D, probes s3a_cohprobe]):
+        delta_n = d . n - G . n0,  delta_s = d . t - G . t0,
+        (t, n) the deformed mid-surface frame of the segment, (t0, n0) the reference one.
+        Objective: a rigid rotation of the element gives zero separation even with a geometric gap.
+    "corotational_linear" (COH2D4 with NLGEOM = NO [D]): the linearisation,
+        delta = R0^T ([[u]] - omega J G), omega = (du_mid . n0)/L the small mid-surface rotation,
+        J the 90-degree rotation; e.g. delta_s = [[u]] . t0 + omega g for a gap g along n0.
+    "global" (S2): delta = R0^T [[u]] (correct only for zero gap or zero rotation).
+    "midsurface": delta = R^T [[u]] in the deformed frame, no gap correction (kept for comparison;
+        not what COH2D4 does).
 
 Energy density with damage frozen at the history value D (D_v when viscous):
     psi = (1 - D) K0/2 (<delta_n>_+^2 + delta_s^2) + K0/2 <-delta_n>_+^2
@@ -167,7 +176,8 @@ class CohesiveInterface:
         bot, top: (n + 1,) node indices of the lower / upper face, paired and ordered along the bond.
         width: out-of-plane thickness W (mm); energies are totals (N*mm).
         quadrature: "nodal" (2-point Newton-Cotes, what COH2D4 uses: S2 probe [D]) or "gauss".
-        frame: "global" (reference segment frame) or "midsurface" (deformed mid-surface frame).
+        frame: "global" (S2 default), "corotational" (COH2D4 + NLGEOM), "corotational_linear"
+            (COH2D4, NLGEOM = NO) or "midsurface" (see the module docstring).
     """
 
     def __init__(self, coords, bot, top, width=1.0, quadrature="nodal", frame="global"):
@@ -184,6 +194,8 @@ class CohesiveInterface:
         t = seg / self.L[:, None]
         self.t0, self.n0 = jnp.asarray(t), jnp.asarray(np.c_[-t[:, 1], t[:, 0]])
         self.N = jnp.stack([0.5 * (1 - self.xi), 0.5 * (1 + self.xi)], axis=1)   # (q, 2)
+        G = self.coords[self.top] - self.coords[self.bot]                   # reference gap per pair
+        self.Gq = jnp.asarray(np.einsum("qa,sai->sqi", np.asarray(self.N), np.stack([G[:-1], G[1:]], axis=1)))
         b, tp = self.bot, self.top
         nodes = np.stack([b[:-1], b[1:], tp[1:], tp[:-1]], axis=1)          # COH2D4 order
         self.elem_dofs = (2 * nodes[:, :, None] + np.arange(2)).reshape(self.n_seg, 8)
@@ -196,16 +208,28 @@ class CohesiveInterface:
         """(delta_n, delta_s) at the quadrature points, each (n_seg, n_q).  u: (n_nodes, 2)."""
         jump = u[self.top] - u[self.bot]                                     # (n+1, 2)
         jq = jnp.einsum("qa,sai->sqi", self.N, jnp.stack([jump[:-1], jump[1:]], axis=1))
+        t0, n0 = self.t0[:, None, :], self.n0[:, None, :]
         if self.frame == "global":
-            t, n = self.t0[:, None, :], self.n0[:, None, :]
-        else:
-            x = jnp.asarray(self.coords) + u
-            xm = 0.5 * (x[self.bot] + x[self.top])
-            seg = xm[1:] - xm[:-1]
-            t = seg / jnp.linalg.norm(seg, axis=1, keepdims=True)
-            n = jnp.stack([-t[:, 1], t[:, 0]], axis=1)
-            t, n = t[:, None, :], n[:, None, :]
-        return jnp.sum(jq * n, -1), jnp.sum(jq * t, -1)
+            return jnp.sum(jq * n0, -1), jnp.sum(jq * t0, -1)
+        Gq = self.Gq                                                        # (s, q, 2) reference gap
+        if self.frame == "corotational_linear":
+            um = 0.5 * (u[self.bot] + u[self.top])
+            omega = jnp.sum((um[1:] - um[:-1]) * self.n0, -1) / jnp.asarray(self.L)       # (s,)
+            JG = jnp.stack([-Gq[..., 1], Gq[..., 0]], axis=-1)
+            v = jq - omega[:, None, None] * JG
+            return jnp.sum(v * n0, -1), jnp.sum(v * t0, -1)
+        x = jnp.asarray(self.coords) + u
+        xm = 0.5 * (x[self.bot] + x[self.top])
+        seg = xm[1:] - xm[:-1]
+        t = seg / jnp.linalg.norm(seg, axis=1, keepdims=True)
+        n = jnp.stack([-t[:, 1], t[:, 0]], axis=1)
+        t, n = t[:, None, :], n[:, None, :]
+        if self.frame == "midsurface":
+            return jnp.sum(jq * n, -1), jnp.sum(jq * t, -1)
+        if self.frame != "corotational":
+            raise ValueError("unknown frame %r" % self.frame)
+        d = Gq + jq                                                         # current gap vector
+        return jnp.sum(d * n, -1) - jnp.sum(Gq * n0, -1), jnp.sum(d * t, -1) - jnp.sum(Gq * t0, -1)
 
     def energy(self, u, Dstiff, K0):
         """Interface energy (N*mm) with the stiffness damage Dstiff (n_seg, n_q) frozen."""

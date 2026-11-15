@@ -29,14 +29,14 @@ ap.add_argument("deck")
 ap.add_argument("outdir")
 ap.add_argument("--history", default="monolithic")
 ap.add_argument("--kinematics", default="svk")
-ap.add_argument("--frame", default="global")
+ap.add_argument("--frame", default=None)
 ap.add_argument("--rtol", type=float, default=1e-10)
 ap.add_argument("--tag", default=None)
 ap.add_argument("--max-increments", type=int, default=10 ** 6)
 ap.add_argument("--verbose", action="store_true")
 a = ap.parse_args()
 job = os.path.basename(a.deck)[:-4]
-tag = a.tag or f"{a.history}_{a.kinematics}_{a.frame}"
+tag = a.tag or f"{a.history}_{a.kinematics}_{a.frame or 'auto'}"
 os.makedirs(a.outdir, exist_ok=True)
 
 t0 = time.perf_counter()
@@ -77,7 +77,7 @@ with open(path, "w", newline="") as fh:
         w.writerow({k: (f"{v:.12g}" if isinstance(v, float) else v) for k, v in r.items()})
 L = res.log
 summ = dict(job=job, tag=tag, deck=os.path.abspath(a.deck), n_q=m.n_q, n_free=int(len(m.free)), colours=m.n_colors,
-            history=a.history, kinematics=a.kinematics, frame=a.frame, rtol=a.rtol,
+            history=a.history, kinematics=a.kinematics, frame=m.frame, coupling=m.coupling, rtol=a.rtol,
             increments=len(L), cutbacks=res.cutbacks, failed=res.failed, message=res.message,
             newton_total=int(sum(l.iterations for l in L)), newton_max=int(max(l.iterations for l in L)),
             passes_total=int(sum(l.passes for l in L)), passes_max=int(max(l.passes for l in L)),
