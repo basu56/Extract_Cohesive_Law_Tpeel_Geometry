@@ -9,7 +9,10 @@ Writes
     s3c_runs.csv      one row per tslid.fe run: options, increments, cutbacks, Newton iterations
                       (converged increments / incl. abandoned attempts), line-search halvings, wall
                       time and its split, P_peak and whole-curve differences vs ABAQUS and vs the
-                      reference tslid.fe run (tag "elc2": rtol 1e-10), on a common delta grid
+                      reference tslid.fe run (tag "elc2": rtol 1e-10), on a common delta grid, over
+                      the full record and over the compare_ld.py window (*_win: delta up to the
+                      sigma_c front at L - 15 mm in the ABAQUS run; excludes the end-of-ligament
+                      collapse)
     s3c_bench.csv     micro-benchmarks (tangent, residual, linear solvers) per deck and core count
 """
 import csv
@@ -20,6 +23,9 @@ import re
 import sys
 
 import numpy as np
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "src"))
+from tslid.analysis.compare_ld import load as cld_load  # noqa: E402
 
 RUN = sys.argv[1]
 OUT = sys.argv[2] if len(sys.argv) > 2 else "results/solver/S3_tpeel"
@@ -40,6 +46,10 @@ num = lambda pat: int(re.findall(pat, msg)[-1])
 rows = [dict(tag="abaqus", increments=num(r"TOTAL OF\s+(\d+)\s+INCREMENTS"), cutbacks=num(r"(\d+)\s+CUTBACKS"),
              iterations_all=num(r"(\d+)\s+ITERATIONS INCLUDING"),
              wall=float(re.findall(r"WALLCLOCK TIME \(SEC\) =\s+(\d+)", msg)[-1]), P_peak=Ppk, complete=True)]
+d_win = cld_load(RUN, "c_s40")["d_end"]          # compare_ld.py window end (sigma_c front at L - 15 mm)
+win = grid <= d_win
+print("window end (ABAQUS coarse, compare_ld.py): delta = %.4f mm" % d_win)
+rows[0]["d_window"] = d_win
 ref = None
 p = os.path.join(RUN, f"c_s40_{REF}_jax.csv")
 if os.path.exists(p):
@@ -62,10 +72,12 @@ for js in sorted(glob.glob(os.path.join(RUN, "c_s40_*_jax.json"))):
                wall=s["wall_run"], t_increments=s.get("t_increments"), failed_wall=s.get("failed_wall"),
                wall_first_call=s.get("wall_first_call"), **{"T_" + k: v for k, v in s.get("timers", {}).items()},
                P_peak=float(d["P"][k]), err_P_peak=float((d["P"][k] - Ppk) / Ppk),
-               max_dP_abq=float(np.abs(e).max()), rms_dP_abq=float(np.sqrt(np.mean(e ** 2))))
+               max_dP_abq=float(np.abs(e).max()), rms_dP_abq=float(np.sqrt(np.mean(e ** 2))),
+               max_dP_abq_win=float(np.abs(e[win[g]]).max()), rms_dP_abq_win=float(np.sqrt(np.mean(e[win[g]] ** 2))))
     if ref is not None:
         er = (P - ref[g]) / Ppk
-        row.update(max_dP_ref=float(np.abs(er).max()), rms_dP_ref=float(np.sqrt(np.mean(er ** 2))))
+        row.update(max_dP_ref=float(np.abs(er).max()), rms_dP_ref=float(np.sqrt(np.mean(er ** 2))),
+                   max_dP_ref_win=float(np.abs(er[win[g]]).max()))
         if s.get("schedule"):                                  # same increments: compare at equal times
             r0 = {round(t, 10): pp for t, pp in zip(*[rd(os.path.join(RUN, os.path.basename(s["schedule"])))[c]
                                                     for c in ("time", "P")])}
