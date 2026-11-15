@@ -97,7 +97,7 @@ float64, and every push is tested automatically. The ABAQUS-side code is unaffec
 - Laptop environment not yet verified.
 - S1 waits for the user's go-ahead.
 
-## S1 — Bulk element and kinematics — 2026-11-14 — code 87c1ce2, log in the following commit
+## S1 — Bulk element and kinematics — 2026-11-14 — code d57cfca, log in the following commit
 
 **Built.**
 - `kinematics.py`: plane-strain energies `linear`, `svk`, and `hencky` (log strain, power series

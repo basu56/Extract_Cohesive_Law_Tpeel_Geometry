@@ -5,7 +5,7 @@ W = 15. Left edge fully clamped. Mesh hx = 0.1, with y graded as in the T-peel b
 element 0.1 at y = 0; `graded()` from `build_tpeel_inp.py`), so both codes have identical nodes.
 ABAQUS: Negishi job 45856435, abaqus/2026, decks from `scripts/fe/build_cantilever_inp.py`, raw data in
 `/scratch/negishi/basu56/tslid_runs/solver_S1_cantilever/`. JAX: `scripts/fe/s1_compare.py`
-(Negishi jobs 45856728 and 45857247; the files here are from 45857247, commit 87c1ce2).
+(Negishi jobs 45856728 and 45857247; the files here are from 45857247, commit d57cfca).
 
 | File | Content |
 |---|---|
