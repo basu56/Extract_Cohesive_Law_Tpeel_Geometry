@@ -372,3 +372,22 @@ Decision (user):
 4. S5 instructions will come from Claude Web (`apply_solver_S5.sh`, `S5_INSTRUCTIONS.md`); S5 does
    not start before they arrive.
 Status: **agreed**.
+
+## 2026-11-15 — D27: S4a review — S4a accepted; E6 on long-tail laws in the front window; S5 go-ahead
+Decision (user):
+1. S4a accepted. All 23 runs pass the load gates and the 0.1 % target. The D18 matched-pair
+   pre-peak differences agree between solvers to ≤ 0.42 % of the signal.
+2. E6 on long-tail laws (`as_s21_a7`: −0.0212 in both solvers in the D26 `front` window) is
+   accepted as a **property of the check**, not a solver failure. It is identical in both
+   solvers, and what the cross-solver comparison needs is E6 agreement (≤ 1e-4 in S4a).
+   - No change to `energy_checks.py`.
+   - **Open item, for the R-curve analysis:** define E6's steady-propagation range by the broken
+     crack tip (traction-free tip) rather than by the window.
+3. Apply the S5 instructions (`apply_solver_S5.sh`, which numbers its own decision), then remove
+   the script in a follow-up commit.
+4. Go ahead with S5.0 → S5a → stop for review. Addition: finite-difference checks must run
+   **deterministically**: a single thread and/or the SuperLU fallback, or MKL conditional
+   numerical reproducibility (MKL_CBWR, PARDISO iparm(34)).
+   - Before the step study, show that two identical runs agree bit for bit (or to ≤ 1e-14).
+   - In the step study, report where noise starts to dominate.
+Status: **agreed**.
