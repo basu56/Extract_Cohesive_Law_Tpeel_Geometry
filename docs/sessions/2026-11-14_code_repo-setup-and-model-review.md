@@ -105,3 +105,4 @@ to the user (D14, pending): see STATUS.md.
   every increment; not ℓ_cz ≪ H (≥ 11 el per ℓ_cz, mesh converged). Speed-ups proposed, not applied.
 - User is checking Claude Web access to the repo before the next step.
 - α sweep (D17) submitted: Negishi SLURM 45840508, 14 runs, rundir /scratch/negishi/basu56/tslid_runs/phase1b_alpha_sweep/.
+- α sweep done (14/14): shape effect on P_peak ≈ σ_c effect; σ_c–α matched-peak pairs differ only pre-peak (1.7–5 %). compare_ld window fix. → results/phase1b_alpha/.

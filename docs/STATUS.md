@@ -42,10 +42,17 @@ G_c 0.4, α 0, σ_c 21–58, production settings, 9/9 runs, all energy checks pa
 vs σ_c 40; post-peak P–Δ identical to ≤ 0.21 % (σ_c ≥ 30: ≤ 0.08 %, ≈ floor); the residual decays
 away from the peak. σ_c information is confined to δ ≲ 0.4 mm.
 
+## Done: α sweep (D17) — `results/phase1b_alpha/README.md`
+SLURM 45840508, 14/14, all energy checks pass. [D] α changes only the peak region, like σ_c. The P_peak
+shift is as large as for σ_c: −6.2 … +2.6 % (σ_c 40) and −8.9 … +4.7 % (σ_c 21).
+[D] σ_c–α trade-off: same-G_c laws with matched P_peak (e.g. σ_c 25/α 0 vs σ_c 21/α −1.5,
+ΔP_peak 0.1 %) differ only on the rising branch before the peak (max 1.7–5 %). After the peak, ≤ 0.11 %.
+Out of the c = 1 bound: σ_c 21 with α ≥ 1.5, and σ_c 40 with α 7 (flagged).
+compare_ld.py window now ends at the σ_c front (fixes an end-effect artefact for long zones).
+
 ## Running
 
-- **α sweep** (D17): G_c 0.4, σ_c 40 and 21, α −3 … 7 (14 runs), `scripts/phase1/run_alpha_sweep.sh`,
-  rundir `/scratch/negishi/basu56/tslid_runs/phase1b_alpha_sweep/` SLURM 45840508.
+Nothing.
 
 ## Runtime note
 A base run takes ~20–25 min on 1 CPU. The cost is 26k CPE4I elements (adherend columns follow
@@ -57,7 +64,8 @@ strip with coarser tied arms (needs a convergence check).
 ## Next actions
 
 0. Repo is public; Claude Web can read it.
-1. Analyse the α sweep (D17): ΔP_peak and post-peak vs α at both σ_c, against the floor; flag ℓ_cz > H.
+1. Decide with the user: the c = 1 bound and α (it was set at α = 0), and how to treat the σ_c–α trade-off
+   (a 2D (σ_c, α) map of the peak-region misfit at fixed G_c would quantify the non-uniqueness).
 1b. Cheap (Web suggestion): R-curve G(ℓ) from existing σ_c-sweep runs; plateau should return 0.40, transient ∝ ℓ_cz.
 2. Possibly repeat the σ_c sweep at G_c 0.1 and 0.25 (same design) to show the result holds across G_c.
 3. Speed up the model (output thinning, then mesh grading + check) before generating data sets.
