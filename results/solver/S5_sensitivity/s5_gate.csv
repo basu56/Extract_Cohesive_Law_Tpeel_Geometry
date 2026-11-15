@@ -1,0 +1,6 @@
+job,increments_old,increments_new,same_schedule_old_new,bitwise_P_old_new,max_dP_rel_old_new,same_schedule_new_new2,bitwise_P_new_new2,max_dP_rel_new_new2,wall_old,iters_old,wall_new,iters_new,wall_new2,iters_new2,wall_new_over_old,wall_new2_over_old,host
+sw_s40,838,838,True,False,9.72747e-12,True,True,0,749.693,1141,632.539,1141,613.558,1141,0.843731,0.818413,1
+sw_s58,875,875,True,False,6.33577e-12,True,True,0,799.459,1972,828.532,1972,797.283,1972,1.03637,0.997279,1
+sw_s21,834,834,True,False,1.15539e-11,True,True,0,639.606,1007,652.149,1007,635.423,1007,1.01961,0.99346,1
+as_s21_am3,836,838,False,False,0.063115,True,True,0,644.353,1242,662.17,1257,649.984,1257,1.02765,1.00874,1
+as_s21_a7,827,832,False,False,0.129869,True,True,0,373.915,971,385.604,980,383.472,980,1.03126,1.02556,1

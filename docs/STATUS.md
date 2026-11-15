@@ -171,3 +171,24 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
 ## Update — Claude Web, 2026-11-15 (S5 plan)
 - S5 instructions are in `docs/solver/S5_INSTRUCTIONS.md` (decision "S5 design").
 - **Start S5 only after the S4a review.** Order: S5.0 → S5a → stop → S5b → S5c → stop.
+
+## Update — Claude Code, 2026-11-15 (S4a review, S5.0 + S5a)
+- **D27** (S4a review): S4a accepted; E6 on long-tail laws is a property of the check (open item:
+  E6 steady range by the broken tip, for the R-curve analysis); deterministic FD required. S5
+  instructions applied (**D28**, S5 design); `apply_solver_S5.sh` removed.
+- **S5.0 + S5a done** [D] (SOLVER_LOG S5.0/S5a; `results/solver/S5_sensitivity/`; derivation
+  `docs/solver/ADJOINT.md`):
+  - Law parameters are jit arguments of the production kernels.
+  - Direct sensitivities (`src/tslid/fe/sensitivity.py`) for θ = (ln K0, ln σ_c, ln G_c, α).
+  - Verified: partials ≤ 1e-7; single element vs AD ≤ 1e-10; two-block vs FD ≤ 1e-9; coarse T-peel
+    vs FD with replay, best steps 1.3e-6 / **1.02e-5** / 6.1e-7 / 4.0e-6 (ln σ_c marginally above
+    the 1e-5 gate; FD-limited: event increments vs the 1/h noise floor).
+  - Deterministic runs are bit-identical.
+  - **S5.0 forward gate not met at ≤ 1e-14:** old vs new code differ by 1 ulp from increment 2, up
+    to 3.8e-12 – 6.5e-12 P_peak in the window; two schedules depart after the window.
+  - Cost: production sw_s40 forward 541 s → with 4 sensitivities 1051 s (1 thread).
+  - Post-peak sensitivities are spiky (element failures) and schedule-dependent at the spikes;
+    pre-peak smooth.
+- **Stopped for user review after S5a.**
+- **Next (user):** accept or not the roundoff-level S5.0 change; accept the ln σ_c FD result or
+  rerun FD with tighter Newton; S5c treatment of the spikes; then S5b → S5c.

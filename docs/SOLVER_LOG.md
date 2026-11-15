@@ -19,7 +19,7 @@ Update this table at each entry.
 | S3 T-peel forward vs ABAQUS | **S3a–S3e done** 2026-11-15 (S3a gate revised to 5e-5, D23); **1 explained E5 failure (as_s21_a7, energy_checks window at the end-of-ligament collapse)**; stopped for review | linear T-peel = ABAQUS to 3e-8; 5 reference cases: max \|ΔP\| ≤ 3.6e-4 P_peak, ΔP_peak ≤ 2.5e-5, ℓ_cz ≤ 0.01 el.; E4–E6 = ABAQUS over the compare_ld window | sw_s40, one job/node: 532 s (1 thread) and 383 s (4) vs ABAQUS 2292 s (0.23× / 0.17×) | ABAQUS-equivalent T-peel forward solve at < 1/4 of its cost, element-local and differentiable |
 | S4a sweeps vs ABAQUS (D25) | **done** 2026-11-15; stopped for review | 23/23 runs (21 laws) pass load gates, max \|ΔP\| ≤ 5.5e-4 P_peak; D18 pair differences agree to ≤ 1.05e-4 P_peak (≤ 0.4 % of signal); E6 of as_s21_a7 fails identically in both solvers (D26 window) | 318–986 s per run, 4 threads | Phase-1 G_c 0.4 dataset reproduced by the differentiable solver |
 | S4b throughput (batched / GPU, increments) | deferred until after S5 (D25) | | | |
-| S5 gradients (adjoint) | not started | | | |
+| S5 gradients | **S5.0 + S5a done** 2026-11-15; stopped for review; **gate 2 (≤ 1e-14) not met: old vs new 4–7e-12 (roundoff); ln σ_c FD 1.02e-5 vs gate 1e-5** | partials ≤ 1e-7; single element vs AD ≤ 1e-10; two-block vs FD ≤ 1e-9; T-peel vs FD best 1.3e-6 / 1.0e-5 / 6.1e-7 / 4.0e-6; repeat runs bit-identical | sw_s40 forward + 4 sensitivities 1051 s vs forward 541 s (1 thread) | exact dP/dθ of the whole discrete curve at ~2× forward cost (17× faster than ABAQUS FD) |
 
 Reference ABAQUS costs:
 - [D] ~20–25 min per T-peel run on 1 CPU (26k CPE4I, full output; `docs/STATUS.md`).
@@ -795,3 +795,172 @@ in both solvers. Rundir `/scratch/negishi/basu56/tslid_runs/solver_S4a/`. Result
   identically in ABAQUS); use the default window for E6 only; or define E6's steady range by the
   traction-free tip regardless of the window.
 - S5: `apply_solver_S5.sh` arrived in the repo root during S4a; not applied, waiting for the user.
+
+## S5.0 / S5a — Law parameters as inputs; direct sensitivities — 2026-11-15 — code 2cd473f, analysis 4 commits to (S5a commit)
+
+Scope (D28 and the S5 instructions; D27 addition: deterministic finite differences). Runs:
+- `/scratch/negishi/basu56/tslid_runs/solver_S5_gate/` (S5.0 gate 2);
+- `solver_S5a/` (coarse `c_s40`: σ_c 40, α 0, S3c deck);
+- `solver_S5a_cost/`.
+
+Jobs 45934469–45934476, one pinned thread each, deterministic environment. Results in
+`results/solver/S5_sensitivity/` (README). Derivation in `docs/solver/ADJOINT.md`.
+
+**Built.**
+- **S5.0, law parameters as kernel inputs.**
+  - `AlphaLawParams` is a JAX pytree. Every `ElementSystem` kernel (energy, value_and_grad,
+    hessian, update_history) takes it as an argument, and `set_theta` swaps it without recompiling.
+  - The cohesive stiffness everywhere (compression penalty included) is θ.K0.
+  - `update_damage` uses the active-branch derivative; a tie counts as unloading. Values are the
+    same as before.
+- **S5a, direct sensitivities.** `src/tslid/fe/sensitivity.py`:
+  - `DirectSensitivity` (the recursion (D1)–(D3) of ADJOINT.md, via jax.jvp, vmapped over p);
+  - `ElementProblem` (production path; the Newton system at the converged q, one factorization,
+    p right-hand sides, IM condensation via `hessian_multi` / `recover_multi`);
+  - `DenseProblem` (tests);
+  - `alpha_log_basis`, `perturb_alpha_log`.
+- **Driver and solver.**
+  - `incremental.run(on_converged=…)`.
+  - `linsolve` accepts (n, p) right-hand sides.
+  - Driver options `--sens` (writes `_sens.npz`) and `--perturb name:h`; `--schedule` accepts a
+    `_sens.npz` (exact times); the CSV is now written at 17 digits.
+- **Scripts.** `det_env.sh`, `run_s5_gate.sh`, `run_s5a_coarse.sh`, `run_s5a_fd.sh`,
+  `run_s5a_cost.sh`, `s5a_analysis.py`.
+- **Tests.** `test_s5_partials.py`, `test_s5a_sensitivity.py`. The suite has 175 passed (all,
+  slow included).
+
+**Verification [D].**
+- **S5.0 gate 3, partials ∂R/∂θ, ∂H/∂θ, ∂Y/∂θ vs central FD at frozen q and h:** ≤ 1e-7.
+  - Point level: every regime (elastic, softening, unloading, fully failed, compressive), inviscid
+    and viscous, α ∈ {−3, 0, 0.3, 5}.
+  - Structure level: the coarse T-peel with damaged, failed and undamaged points.
+  - Fully failed (inviscid): the partials are exactly 0 and NaN-free.
+  - Partials that vanish analytically (the middle of a linear softening range) are measured
+    against a floor of 1e-6 σ_c.
+- **S5a tests.**
+  - Single cohesive element (cyclic mixed mode with compression; μ ∈ {0, 2e-3}; α ∈ {0, 4}) vs
+    jax.jacfwd of the explicit secant-law history: ≤ 1e-10.
+  - Two-block bar (monolithic; μ ∈ {0, 0.05}) vs Richardson central FD on the same load steps:
+    ≤ 1e-9.
+    - The test Newton has to converge to roundoff: at a residual tolerance of 1e-12·R, the FD
+      reference itself was off by 2e-9.
+  - Coarse T-peel (σ_c 2, first 20 increments): condensed = uncondensed to ≤ 1e-9; res_free ≤ 1e-8;
+    FD with replay at h = 1e-3 gives 4e-8 to 2e-6.
+- **S5.0 gate 2, forward results unchanged** (`s5_gate.csv`; old code = worktree at 7e21d1a with
+  only its CSV format widened):
+  - **New vs new again: bit-identical in 5/5** (schedules and P).
+  - **Old vs new: not bit-identical. The ≤ 1e-14 gate is not met.**
+    - The first difference is at increment 2, of 5.0e-16 to 6.2e-16 P_peak (1 ulp).
+    - Inside the comparison window it grows to at most 3.8e-12 (`sw_s40`), 4.2e-12 (`sw_s58`),
+      4.3e-12 (`sw_s21`), 4.2e-12 (`as_s21_am3`) and 6.5e-12 (`as_s21_a7`).
+    - `sw_s40`, `sw_s58` and `sw_s21` keep the same schedule to the end; the whole-run maximum is
+      ≤ 1.2e-11.
+    - `as_s21_am3` and `as_s21_a7` take a different increment after the window (δ = 1.389 and
+      1.378 mm; window end 1.228 and 1.212). From there the end-of-ligament collapse differs by up
+      to 6 % / 13 %, i.e. a different schedule.
+    - [H] The cause is compilation: with the parameters as runtime arguments, XLA no longer folds
+      the law constants (d0, expm1(α), …) at compile time. The arithmetic differs in the last bit,
+      and the path-dependent solve amplifies that. The size is below the 4-thread run-to-run noise
+      of S4a (1e-10).
+  - **Timing (new/old, same job):** 0.84, 1.04, 1.02, 1.03, 1.03; new-again/old 0.82–1.03.
+    - The `sw_s40` old run (750 s) is slow compared with both new runs (633 / 614 s); otherwise
+      the new code is 2–4 % slower in the first run and 0–3 % in the second.
+    - [I] Within noise or a few percent; not significant at this sample size.
+- **Determinism, coarse rtol 1e-10** (`s5a_determinism.csv`). Shown before the step study, as D27
+  asked.
+  - **Repeat run (PARDISO, 1 thread, MKL_CBWR=COMPATIBLE, single-thread XLA): bit-identical:** 1692
+    increments, P and all four sensitivity columns.
+  - PARDISO vs SuperLU: identical increments through the window (they depart at δ = 1.524). P
+    agrees to 2.1e-12; S to 9.9e-10 / 4.6e-10 / 5.6e-10 / 3.1e-10 (ln K0, ln σ_c, ln G_c, α).
+  - Replay of b1's schedule: identical increments through the window. P agrees to 2.2e-12, not
+    bitwise, because a replayed Δt = target − t differs from the adaptive Δt by an ulp. One
+    cutback at δ = 1.535 is after the window.
+- **Kinks.** No quadrature point within 1e-8 (relative) of the loading switch or of failure, in any
+  increment: coarse (1692) and production (838).
+  - res_free ≤ 1.6e-10 (coarse) and 9.1e-11 (production). All sensitivities are finite.
+- **S5a step study, coarse, central FD with replay at rtol 1e-10** (`s5a_stepstudy.csv`,
+  `s5a.png` a). Curve-wise ‖S_dir − S_FD‖₂/‖S_FD‖₂ over the window:
+
+| h | ln K0 | ln σ_c | ln G_c | α |
+|---|---|---|---|---|
+| 1e-3 | invalid (± run leaves the schedule at δ 0.62) | invalid (0.60) | invalid (0.62) | invalid (0.92) |
+| 1e-4 | 0.12 | 0.34 | invalid (0.66) | 0.099 |
+| 1e-5 | 0.042 | 0.10 | 0.17 | 8.1e-6 |
+| 1e-6 | **1.3e-6** | 1.03e-5 | 0.079 | **4.0e-6** |
+| 1e-7 | 1.2e-5 | **1.02e-5** | **6.1e-7** | 3.9e-5 |
+
+  - **Gate ≤ 1e-5 at the best step: met for ln K0, ln G_c and α. ln σ_c reaches 1.02e-5 at its
+    best two steps, marginally above the gate.**
+  - Where the error sits (point-wise, against δ):
+    1. **Between failure events** there is a noise floor that grows as 1/h: about 1e-6 N at
+       h = 1e-4, 1e-5 at 1e-5, 1e-4 at 1e-6 and 1e-3 at 1e-7. This is the Newton tolerance
+       (rtol 1e-10) divided by 2h. **Noise dominates below h ≈ 1e-6** for ln K0, ln σ_c and α.
+       Excluding the event increments, ln σ_c gives 3.7e-3 / 7.5e-6 / 7.6e-5 at h = 1e-5 / 1e-6
+       / 1e-7.
+    2. **At the element-failure increments** (212 of the 1288 in the window: post-peak drops above
+       3× the median drop), P_n(θ) is very steep. That is where the spikes of dP/dθ are; ln G_c
+       spikes reach ~5e4 N against a ~100 N baseline. FD truncation error there is O(1) for
+       h ≥ 1e-5 (ln G_c: h ≥ 1e-6) and dominates the curve norm.
+    3. **History branch changes.** At ln G_c, h = 1e-4, a perturbed run takes a different branch
+       at δ ≈ 0.63, giving a persistent offset afterwards.
+  - The kink counters flagged none of this: they test 1e-8 at the base state. A FD step of
+    relative size h straddles any event within ~h. [I] There is no window of h in which both
+    error sources are small for ln σ_c at rtol 1e-10. The residual 1.0e-5 is the FD reference,
+    not the direct method: the method agrees with every independent check at 1e-9–1e-10, and the
+    error shrinks as h moves away from either limit.
+- **Tolerance effect** (`s5a_tolerance.csv`).
+  - rtol 1e-6 vs 1e-10 **on the same schedule:** 5.6e-5 (ln K0), 2.4e-4 (ln σ_c), 3.6e-5 (ln G_c),
+    1.0e-4 (α); P 2.3e-6.
+  - **On its own schedule** (1690 vs 1692 increments, compared at b1's δ): 2e-8 – 5e-8 before the
+    peak, but **0.32–0.43 over the whole window**, because the failure spikes fall at different
+    increments.
+  - [I] The discrete post-peak sensitivity is schedule-dependent at the spikes. The smooth part and
+    the pre-peak part are not.
+
+**Runtime [D]** (`s5a_cost.csv`; job 45934476, one node, 1 pinned thread, rtol 1e-6):
+
+| run | forward | forward + sensitivities | sensitivity time (Hessian / solve / jvp) |
+|---|---|---|---|
+| coarse `c_s40` (×2) | 96.1 / 97.1 s | 143.3 / 134.4 s (+48 % / +39 %) | 39.4 / 36.9 s (17.4 / 11.0 / ~11) |
+| production `sw_s40` | 541 s | 1051 s (**+94 %**) | 515 s (254 / 150 / ~110) |
+
+- The production forward run needs only 1.36 Newton iterations per increment (1141 / 838). The one
+  extra Hessian and factorization at the converged state is therefore about as expensive as the
+  forward Newton work itself.
+- First-call (JIT) cost of the sensitivity kernels: 12–13 s (coarse) and 18 s (production).
+- Comparison for 4 parameters by central FD, which needs 8 runs:
+  - ABAQUS: 8 × 2292 s (S3d, same node type) ≈ 5.1 h;
+  - tslid.fe FD: 8 × 541 s ≈ 72 min;
+  - tslid.fe direct: 17.5 min, i.e. **17× faster than ABAQUS FD and 4× faster than our own FD**.
+  - The direct method also gives exact derivatives where no single FD step works (above).
+
+**Gain.**
+- Exact derivatives of the whole discrete P–δ curve (and mouth openings) with respect to
+  (ln K0, ln σ_c, ln G_c, α), from one run at about 2× the forward cost.
+- Verified against analytic AD (single element, 1e-10), FD (two-block 1e-9; T-peel at FD's own
+  accuracy limit) and an independent factorization (SuperLU, 1e-9).
+- Deterministic runs are bit-identical.
+- Production `sw_s40` sensitivities are saved for S5c (`s5a_sw_s40_S.npz`). The pre-peak part is
+  smooth: dP/d ln σ_c rises to 98 N and dP/d ln G_c to 237 N before the peak.
+
+**Cost / limitations.**
+- S5.0 gate 2 is not met at ≤ 1e-14 (old vs new 4–7e-12 in the window; above).
+- The ln σ_c FD gate is marginal (1.02e-5).
+- Production overhead is +94 %. [H] It could be lowered by reusing the last Newton factorization
+  (at the penultimate iterate) with a few refinement steps against the exact Hessian-vector
+  product, instead of a fresh factorization. Not done.
+- Post-peak sensitivities on these meshes are a train of element-failure spikes whose heights
+  depend on the increment schedule. This matters for S5c (a Fisher matrix summed over the
+  post-peak window).
+
+**Open items (user).**
+1. S5.0 gate 2: accept the roundoff-level change (≤ 6.5e-12 in the window, two late schedule
+   departures), or require bit-identity with the pre-S5 code (e.g. closure-constant kernels for
+   forward-only runs, at the price of two code paths).
+2. S5a FD gate for ln σ_c (1.02e-5). Options: accept (the error is FD-limited, as shown); or rerun
+   the step study with tighter Newton for the FD runs (rtol 1e-12, if it converges) to lower the
+   noise floor ~100×. That is about 1 h of jobs.
+3. S5c design given the spikes. Options: Fisher over the pre-peak part and over the window
+   separately; check F's stability under a different schedule (rtol 1e-6 own schedule vs
+   replay); smooth over one element length. To decide before S5c.
+4. Optional: cut the production overhead (factorization reuse, above).

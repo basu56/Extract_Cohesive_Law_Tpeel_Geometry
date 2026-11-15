@@ -242,8 +242,8 @@ if "b1" in S:
     lo, hi = np.nanpercentile(b1["dP"][w], [1, 99])
     ax[1].set_ylim(lo - 0.1 * (hi - lo), hi + 0.1 * (hi - lo))
     ax[1].set(xlabel=r"$\Delta$ (mm)", ylabel=r"$dP/d\theta$ (N)",
-              title="(b) coarse, window: sensitivities (lines), FD h = 1e-6 (markers)\n"
-                    "y clipped to 1-99 %: element-failure spikes off scale")
+              title="(b) coarse: direct (lines), FD h = 1e-6 (markers)\n"
+                    "window; y clipped 1-99 % (failure spikes off scale)")
     ax[1].legend(frameon=False, fontsize=8)
 if os.path.exists(prod):
     z = np.load(prod)
@@ -257,8 +257,8 @@ if os.path.exists(prod):
     ax[2].set_ylim(lo - 0.1 * (hi - lo), hi + 0.1 * (hi - lo))
     ax[2].axvspan(0.10, 0.22, color="0.92", zorder=0)
     ax[2].set(xlabel=r"$\Delta$ (mm)", ylabel=r"$dP/d\theta$ (N)",
-              title="(c) production sw_s40, rtol 1e-6, window (y clipped 1-99 %)\n"
-                    "grey band: D18 pre-peak window; grey line P")
+              title="(c) production sw_s40, rtol 1e-6, window\n"
+                    "y clipped 1-99 %; grey: P, D18 pre-peak band")
     ax[2].legend(frameon=False, fontsize=8, loc="upper right")
 fig.tight_layout()
 for ext in ("png", "pdf"):

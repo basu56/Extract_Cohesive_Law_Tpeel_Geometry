@@ -1,0 +1,4 @@
+pair,n,bitwise_time,bitwise_P,bitwise_dP,max_dP_rel,max_dS_rel,common_prefix,prefix_covers_window,delta_first_difference,dS_rel_ln_K0,dS_rel_ln_sigc,dS_rel_ln_Gc,dS_rel_alpha,bitwise_P_window
+"b1 vs b2 (PARDISO, repeat)",1692,True,True,True,0,0,,,,,,,,
+b1 vs bslu (PARDISO vs SuperLU),1684,,,,2.13841e-12,,1645,True,1.52363,9.88853e-10,4.55078e-10,5.63213e-10,3.05983e-10,
+b1 vs r0 (replay of b1's schedule),1693,,,,2.23868e-12,,1654,True,1.53463,,,,,False

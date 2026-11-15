@@ -1,0 +1,3 @@
+run,increments,increments_b1,rel_ln_K0,rel_ln_sigc,rel_ln_Gc,rel_alpha,P_rel,rel_prepeak_ln_K0,rel_prepeak_ln_sigc,rel_prepeak_ln_Gc,rel_prepeak_alpha
+"rtol 1e-6, b1 schedule",1692,1692,5.63125e-05,0.000243932,3.56586e-05,0.000100804,2.33983e-06,,,,
+"rtol 1e-6, own schedule",1690,1692,0.321007,0.353414,0.433399,0.420263,0.00187186,3.76051e-08,5.07659e-08,2.15062e-08,3.18155e-08
