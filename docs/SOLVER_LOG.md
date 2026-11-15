@@ -16,7 +16,7 @@ Update this table at each entry.
 | S0 environment | **done** 2026-11-14 | 16/16 tests on Bell, Negishi node, GitHub CI; `test_laws` OK on Py 3.6 | suite 14–15 s (Bell login, Negishi node) | one locked JAX/tatva env on every machine, with CI |
 | S1 bulk element | **done**, 1 flagged item 2026-11-14 | Q4IM = CPE4I to 1e-8 (linear); NLGEOM v, M ≤ 4e-5; u_tip 1.25 % SVK / 0.30 % Hencky (own value) | ny=20 linear 1.8 s/solve; NL 2.6 s/incr (ABAQUS 50 s total) | locking-free bulk element matching CPE4I; constitutive gap quantified |
 | S2 cohesive interface | **done** 2026-11-14 | 20 inviscid COH2D4 runs ≤ 6.8e-8 σ_c; viscous ≤ 4.8e-8 until D = 1; COH2D4 = nodal quadrature | 2000-increment element history ~0.5 s | ABAQUS cohesive behaviour reproduced exactly, with exact gradients in (K0, σ_c, G_c, α) |
-| S3 T-peel forward vs ABAQUS | **S3a gate missed (explained; revised to 5e-5, D23), S3b done, S3c done** 2026-11-15; stopped for review | linear T-peel = ABAQUS to 3e-8; NLGEOM 2–3e-5 RF2; COH2D4 gap kinematics; monolithic history; S3c: element tangent = jacfwd to 6e-14, coarse E4–E6 pass, production sw_s40 P_peak 5.7e-6, window max 8.4e-5 | production sw_s40 490 s (1 thread, rtol 1e-6) vs ABAQUS 2321 s; coarse 91 s vs 256 s | T-peel imported node for node; one Newton solve per increment; 10× faster than S3b, 0.21× ABAQUS wall on the production case |
+| S3 T-peel forward vs ABAQUS | **S3a–S3e done** 2026-11-15 (S3a gate revised to 5e-5, D23); **1 explained E5 failure (as_s21_a7, energy_checks window at the end-of-ligament collapse)**; stopped for review | linear T-peel = ABAQUS to 3e-8; 5 reference cases: max \|ΔP\| ≤ 3.6e-4 P_peak, ΔP_peak ≤ 2.5e-5, ℓ_cz ≤ 0.01 el.; E4–E6 = ABAQUS over the compare_ld window | sw_s40, one job/node: 532 s (1 thread) and 383 s (4) vs ABAQUS 2292 s (0.23× / 0.17×) | ABAQUS-equivalent T-peel forward solve at < 1/4 of its cost, element-local and differentiable |
 | S4 throughput (batched / GPU) | not started | | | |
 | S5 gradients (adjoint) | not started | | | |
 
@@ -547,3 +547,175 @@ Negishi `cpu` nodes have no SMT (`scontrol show node`: ThreadsPerCore = 1, 2 × 
 variation is more likely from other jobs sharing the L3 cache and memory bandwidth of the node,
 and from clock-frequency differences. The conclusion stands: ratios measured within one job are
 reliable, absolute numbers across jobs are indicative.
+
+## S3d — Production reference case `sw_s40` vs ABAQUS — 2026-11-15 — commits b346dd2…cdf0817 (code), log in the following commit
+
+D24 configuration, agreed at the S3c review: element assembly, IM condensation, PARDISO-sym with
+analysis reuse, divergence check, rtol 1e-6. The production mesh is imported from the `sw_s40`
+deck, D16 settings. Rundir `/scratch/negishi/basu56/tslid_runs/solver_S3d/`. Tables
+`results/solver/S3_tpeel/s3d_compare.csv`, `s3d_timing.csv`, `s3d_traction_location.csv`; figure
+`s3de.png`.
+
+**Built.**
+- `src/tslid/analysis/compare_solvers.py` (Python 3.6 compatible). It reuses
+  `compare_ld.load`, `energy_checks.check` and `zone_fronts`, and reports:
+  - whole-curve max |ΔP| on the union of both records' δ in the compare_ld window, and the rms;
+  - ΔP_peak and Δδ_peak against the local increment;
+  - the elastic slope, fitted on the rising branch;
+  - ℓ_cz, the crack tip and σ_c front x(δ), and E4–E6 for both solvers;
+  - the gates.
+- `linsolve.make_solver`: automatic SuperLU-MMD fallback when pypardiso/MKL is unavailable, with
+  a test.
+- Driver defaults are now D24.
+- `tpeel_output.py`: viscous-overstress energy split (see S3e).
+- `scripts/fe/s3d_traction_location.py`, `thin_output_deck.py`, `run_s3d_timing.sh`,
+  `s3d_timing_summary.py`, `s3de_compare.py`.
+- Tests: 156 pass (fast suite), CI green.
+
+**Verification, gates [D]** (`sw_s40`, compare_ld window 0–1.2743 mm):
+
+| quantity | tslid.fe vs ABAQUS | gate |
+|---|---|---|
+| whole-curve max \|ΔP\|/P_peak | 8.6e-5 (at δ = 0.136; post-peak 5.6e-5) | ≤ 5e-3; target 1e-3 met |
+| rms | 1.3e-5 | – |
+| ΔP_peak | +5.7e-6 | ≤ 1e-3 |
+| Δδ_peak | −4.4e-5 mm (increment 2e-3 mm) | within one increment |
+| elastic slope | 3259.18 vs 3259.29 N/mm (−3.5e-5) | – |
+| ℓ_cz | 2.6869 vs 2.6869 mm (0.00 el.) | ≤ 2 elements |
+| crack tip / σ_c front | max 0.0016 / 0.0015 mm (0.02 el.) | – |
+| E4 / E5 / E6 | 2.6e-5 / 7.2e-5 / −1.3e-3 (ABAQUS 1.2e-5 / 7.1e-5 / −1.3e-3) | pass both |
+
+The target is met. The difference is close to the S3a elastic floor (2–3e-5 in RF2), i.e. near
+the Q4IM-vs-CPE4I NLGEOM floor, not the 0.04 % mesh floor.
+
+**Toggles (one run each) [D].**
+- **SVK vs Hencky:** max |ΔP| 2.7e-5 P_peak (≤ 1e-4), so **SVK stays the default** (D21
+  acceptance test passed). Hencky is 1.4× slower (498 vs 364 s, 4 threads, separate jobs).
+- **Cohesive frame:**
+  - `global` and `midsurface` (rotated without gap correction, the frame item 5 describes) are
+    identical to 2e-9 N.
+  - [I] With equal normal and shear stiffness the energy depends only on δ_m and the compressive
+    part, and a rotation leaves |δ| unchanged.
+  - Both are 1.2e-4 P_peak from the default corotational frame (with gap correction, S3a) and
+    farther from ABAQUS: max 1.5e-4 vs 8.6e-5, rms 3.6e-5 vs 1.3e-5.
+  - **The corotational frame stays the default.**
+
+**D23 item: where the S3a traction difference sits [D].**
+- Elastic NLGEOM run, frames at 331 and 675 N. The largest normal (2.6e-4 / 3.0e-4 of max S22)
+  and shear (1.4e-4 / 1.6e-4) differences are **at the crack tip**, x = 18.0–18.1 mm, the first
+  bond node, which is also the location of max S22.
+- 35–46 % of Σ|Δt| lies within 2 mm of the tip; none within 2 mm of the bond end (x = 76.2).
+
+**Timing, D25 protocol [D]** (job 45907082, node a017, AMD EPYC 7763; one job, runs in sequence,
+each pinned to CPU 99 or 99–102 of the job's 16 dedicated cores):
+
+| run | wall (whole command) | analysis | increments / cutbacks / iterations | output |
+|---|---|---|---|---|
+| ABAQUS, default deck (`cpus=1`) | 2292 s | 2273 s | 839 / 9 / 1079 | 722 MB |
+| ABAQUS, field output thinned to tslid.fe's (`cpus=1`) | 2183 s (0.95×) | 2172 s | 839 / 9 / 1079 | 51 MB |
+| tslid.fe, 1 thread | **532 s (0.23×; 0.24× of thinned)** | 489 s | 838 / 8 / 1141 | 6 MB |
+| tslid.fe, 4 threads | **383 s (0.17×; 0.18× of thinned)** | 339 s | 838 / 8 / 1141 | 6 MB |
+
+- tslid.fe setup is 4.8 / 7.3 s, first call (JIT) 9.0 / 6.4 s, output writing 41 / 37 s (1 / 4
+  threads).
+- The timed 1-thread run passes all gates with the same numbers as above.
+- An exclusive node (128 cores) exceeds the tomar group cap of 64 hp_cpu and never starts. The
+  job therefore had 16 dedicated cores on a shared node.
+- [H] Other jobs on the node may share L3 and memory bandwidth (no SMT on Negishi).
+- The cross-job numbers in S3c and S3e (e.g. 490 s) are indicative; these are the publishable
+  ratios.
+- Thinning ABAQUS's field output saves only 5 %: ABAQUS's cost is the solution, not the output.
+
+**Gain.**
+- On the production reference case, tslid.fe reproduces ABAQUS's P–Δ to 8.6e-5 P_peak and its
+  energy diagnostics, ℓ_cz and crack-tip history.
+- It does so in 0.23× ABAQUS's wall time on 1 core (0.17× on 4), measured in one job on one node.
+- `compare_solvers.py` makes the cross-solver comparison a single command for S4a.
+
+**Cost / limitations.**
+- The pinned node was shared with other jobs (group cap).
+- The ALLDMD/ALLCD split is ours (exact in the continuum); ABAQUS's split is not documented to us.
+- Hencky costs 1.4× SVK.
+
+**Open items.** See S3e.
+
+## S3e — The four extreme cases — 2026-11-15 — same commits as S3d
+
+D24 defaults (element assembly, IM condensation, PARDISO-sym, divergence check, rtol 1e-6), 4
+threads. `compare_solvers.py` against the ABAQUS references (`phase1a_sigc_sweep`,
+`phase1b_alpha_sweep`). Rundir `/scratch/negishi/basu56/tslid_runs/solver_S3e/`. Tables in
+`results/solver/S3_tpeel/s3e_compare.csv`, figure `s3de.png`. Reported per case, not averaged.
+
+**Verification [D]** (window = compare_ld window; ℓ_cz in elements of h_coh = 0.1 mm):
+
+| case | regime | max \|ΔP\|/P_peak (rms) | ΔP_peak | Δδ_peak (mm) | Δℓ_cz | max \|Δx_tip\| | E4 / E5 / E6 ours (ABAQUS) | gates |
+|---|---|---|---|---|---|---|---|---|
+| `sw_s58` | short zone, ℓ_cz = 10.8 el. | 3.6e-4 (8.5e-5) | −1.8e-5 | −4e-5 | +0.01 | 0.22 el. | 3.8e-5 / 9.3e-5 / −3.6e-4 (1.9e-5 / 9.0e-5 / −3.6e-4) | pass, target met |
+| `sw_s21` | long zone, ℓ_cz = 63 el. | 4.1e-5 (7.7e-6) | −2.5e-5 | −4e-5 | −0.01 | 0.01 el. | 2.1e-5 / 7.2e-5 / −3.2e-3 (4.7e-6 / 1.0e-4 / −3.2e-3) | pass, target met |
+| `as_s21_am3` | α = −3 | 7.0e-5 (1.1e-5) | −1.5e-5 | −4e-5 | −0.00 | 0.01 el. | 2.3e-5 / 5.4e-5 / −1.9e-3 (2.4e-6 / 5.3e-5 / −1.9e-3) | pass, target met |
+| `as_s21_a7` | α = 7, ℓ_cz = 144 el. > 2H | 2.8e-5 (7.9e-6) | −1.9e-5 | −4e-5 | −0.01 | 0.01 el. | 7.7e-3 / **3.4e-2** / −1.8e-2 (2.6e-6 / 4.8e-5 / −1.7e-2) | **E5 fails** (explained below); P gates pass, target met |
+
+Elastic slopes agree to ≤ 4.4e-5 in all cases. The largest P difference is in the short-zone case,
+where single-element snaps are largest (10.8 elements per ℓ_cz), and is still 14× under the
+target.
+
+**The `as_s21_a7` E5 failure.** `energy_checks.py` ends its E4/E5 window when the traction-free
+tip passes L − 15 mm. With the α = 7 tail, the tip lags so far behind the σ_c front that the
+end-of-ligament collapse (δ ≈ 1.3776 mm) begins inside that window.
+- ABAQUS goes from P = 175 to 30 N in one frame. Its last window frame (694) is therefore before
+  the collapse: E5 4.8e-5.
+- tslid.fe resolves the collapse in several increments. Its last window frame (702) is the first
+  collapse frame (P 170 → 106 N), in which the viscous overstress works over the unstable step.
+- Over the following frame ABAQUS shows the same thing: ALLCD jumps from 0.013 to 9.96 N·mm, and
+  its balance residual reaches −5.2e-2.
+- Up to the frame before the collapse (701), ours gives E4 7e-6 and ALLCD/ALLDMD 6.4e-5.
+- Over the compare_ld window used by the P gates (σ_c front at L − 15 mm, δ ≤ 1.2123):
+
+  | | E4 | E5 |
+  |---|---|---|
+  | tslid.fe | 2.1e-5 | 4.7e-5 |
+  | ABAQUS | 2.6e-6 | 4.7e-5 |
+
+  The same holds in all five cases: E5 within 3 % of ABAQUS's value, E4 ≤ 3.8e-5.
+- [I] The failure is a window-definition artifact at the end-of-ligament collapse, not a solver
+  error. `energy_checks.py` is shared analysis code and is not changed without the user.
+
+**Energy split corrected during S3e.**
+- The S3c split, ALLDMD = G_d(δ_max) with a trapezoid ALLCD = ∫Y d(D_v − D), double-counted the
+  energy still stored through a lagging D_v.
+- On the first S3e runs it gave E4 1.9e-2 and a negative E5 (−1.6e-2) for `as_s21_a7`, and
+  E5 = −4.8e-5 for `sw_s21`.
+- It is replaced by ALLDMD = G_d(δ_max) − (D − D_v)·Y and ALLCD = the work of the viscous
+  overstress (D − D_v)K0δ⁺ (`tpeel_output.py`; formulation in its docstring). With this,
+  ALLSE_coh + ALLDMD + ALLCD = ∫t·dδ holds exactly, and ALLCD ≥ 0.
+- All S3d/S3e runs were repeated with it. The superseded outputs are kept in `solver_S3d/v1`
+  and `solver_S3e/v1`; P is identical.
+- The S3c coarse energy gate used the old split. Its values were within the S3c tolerances, but
+  only the S3d/S3e values use the final split.
+
+**Runtime (indicative, separate jobs, 4 threads)** [D]:
+
+| case | ours: increments / cutbacks / iterations, wall | ABAQUS: increments / cutbacks / iterations, wall |
+|---|---|---|
+| `sw_s58` | 875 / 25 / 1972, 653 s | 1009 / 87 / 1790, 3338 s |
+| `sw_s21` | 834 / 8 / 1007, 520 s | 824 / 6 / 1004, 2154 s |
+| `as_s21_am3` | 836 / 7 / 1238, 390 s | 845 / 11 / 1105, 2254 s |
+| `as_s21_a7` | 827 / 6 / 969, 312 s | 812 / 2 / 1182, 2395 s |
+
+- The same runs measured 315–805 s in the first (v1) set; node-to-node variation is up to 1.6×.
+- PARDISO had 0 perturbed pivots in every run.
+
+**Gain.** The five reference cases span ℓ_cz from 10.8 to 144 elements and α from −3 to 7. In all
+of them our P–Δ matches ABAQUS to ≤ 3.6e-4 P_peak and P_peak to ≤ 2.5e-5. The crack tip agrees to
+≤ 0.22 elements and ℓ_cz to ≤ 0.01 elements.
+
+**Cost / limitations.**
+- One energy-gate failure, explained above, which needs a user decision on the E4/E5 window.
+- The energy split is ours (documented, exact in the continuum); ABAQUS's split is not known to
+  us.
+
+**Open items (user).**
+- The E4/E5 window for long-tail laws. Proposal: evaluate E4/E5 over the compare_ld window (σ_c
+  front at L − 15 mm) for both solvers, or end the window before the first frame of the
+  end-of-ligament collapse.
+- Then S4a: the 21 σ_c and α sweep runs against ABAQUS (D25).

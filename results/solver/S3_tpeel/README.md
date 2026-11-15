@@ -194,3 +194,6 @@ All P gates (0.5 %, 0.1 %, one increment, 2 elements) and the 0.1 % target are m
     corotational frame, and farther from ABAQUS (max 1.5e-4 vs 8.6e-5). Corotational stays.
 - S3a traction difference: at the crack tip (x = 18.0–18.1 mm). 35–46 % of Σ|Δt| lies within
   2 mm of the tip, none within 2 mm of the bond end.
+- Timing (D25 protocol, `s3d_timing.csv`; one job, node a017, pinned): ABAQUS default deck 2292 s,
+  thinned output 2183 s. tslid.fe: **532 s on 1 thread (0.23×)** and **383 s on 4 threads (0.17×)**,
+  same increments (838 vs 839).

@@ -1,0 +1,5 @@
+run,host,threads,wall,analysis_wall,increments,cutbacks,iterations_all,completed,output_MB,ratio_wall,ratio_analysis,setup,first_call,t_io,rtol,linsolve
+tm_abq_default,a017.negishi.rcac.purdue.edu,1,2292,2273,839,9,1079,True,722.199,1,1,,,,,
+tm_abq_thin,a017.negishi.rcac.purdue.edu,1,2182.69,2172,839,9,1079,True,50.894,0.952308,0.955565,,,,,
+tslid.fe_t1,a017.negishi.rcac.purdue.edu,1,531.7,488.638,838,8,1141,True,5.94221,0.231981,0.214975,4.82518,9.04771,40.7499,1e-06,pardiso_sym
+tslid.fe_t4,a017.negishi.rcac.purdue.edu,4,383.07,339.095,838,8,1141,True,5.94258,0.167134,0.149184,7.34588,6.4258,36.7796,1e-06,pardiso_sym

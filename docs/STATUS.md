@@ -1,6 +1,6 @@
 # Project status (handoff page)
 
-_Last updated: 2026-11-15 (S3c) by Claude Code. Overwrite this page each session._
+_Last updated: 2026-11-15 (S3d/S3e) by Claude Code. Overwrite this page each session._
 
 ## Where we are
 
@@ -125,10 +125,30 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
   - **D24 proposed**: this configuration + rtol 1e-6; `pypardiso` added to the `fe` extra.
   - UMFPACK / CHOLMOD not benchmarked (no SuiteSparse on Negishi; a micromamba install was blocked by
     session permissions).
-- **Stopped for user review after S3c** (as instructed). Production is 0.21× ABAQUS, below the 2× threshold.
+- User review of S3c: **D24 agreed** (+ SuperLU fallback, done), **D25** (residual check for the
+  condensed step; D25 timing protocol; after S3e: S4a = the 21 sweep runs vs ABAQUS, then S5; S4b
+  batching/GPU/increments after S5).
+- **S3d done** [D] (`sw_s40`; SOLVER_LOG S3d):
+  - All gates pass and the 0.1 % target is met: max |ΔP| 8.6e-5 P_peak, ΔP_peak +5.7e-6, ℓ_cz equal,
+    E4–E6 equal to ABAQUS's.
+  - Toggles: Hencky vs SVK 2.7e-5, so SVK stays. Frames `global` = `midsurface` (2e-9 N); both are
+    farther from ABAQUS than the corotational default, which stays.
+  - D23 item: the S3a traction difference sits at the crack tip.
+  - **Timing (D25, one job, one node): tslid.fe 532 s (1 thread) and 383 s (4) vs ABAQUS 2292 s
+    (default deck) and 2183 s (thinned output): 0.23× / 0.17×.**
+- **S3e done** [D] (`sw_s58`, `sw_s21`, `as_s21_am3`, `as_s21_a7`):
+  - All P gates and the 0.1 % target are met (worst `sw_s58`, max |ΔP| 3.6e-4).
+  - **One explained failure: `as_s21_a7` E5 = 3.4e-2 in the `energy_checks.py` window.** Its window
+    ends mid end-of-ligament collapse for the α = 7 long tail; ABAQUS skips the collapse in one
+    frame.
+  - Over the compare_ld window, E4/E5 pass in all five cases and E5 equals ABAQUS's within 3 %.
+- Energy split in `tpeel_output.py` corrected (viscous-overstress split; the S3c split
+  double-counted a lagging D_v). All S3d/S3e runs repeated with it.
+- **Stopped for user review after S3e** (D25).
 - **Next:**
-  - User: confirm D24 (configuration, rtol 1e-6); go-ahead for S3d.
-  - S3d: `compare_solvers.py`, formal `sw_s40` gates, SVK/Hencky toggle, location of the S3a traction
-    difference along the bond (D23), then the other four reference cases.
+  - User: decide the E4/E5 window for long-tail laws. Proposal: compare_ld window (σ_c front at
+    L − 15 mm) for both solvers, or end the window before the end-of-ligament collapse.
+  - Then S4a: rerun the 21 σ_c and α sweep runs with tslid.fe and compare each against ABAQUS
+    (`compare_solvers.py`). Then S5 (gradients).
 - Open: GPU model / access on Negishi `gpu` partition (S4); laptop env untested; ABAQUS manual citations
   unverified (user checking 3DS access).
