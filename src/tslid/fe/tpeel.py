@@ -130,6 +130,8 @@ class TPeelModel:
         self._grad = jax.jit(grad)
         self._jac = jax.jit(sparse_jacfwd(grad, self.colored))
         self._energy = jax.jit(self.energy_full)
+        # S3c: energy of the reduced vector q with the coupling lift in JAX (one fused call for E, r_q)
+        self._vg_q = jax.jit(jax.value_and_grad(lambda q, *h: self.energy_full(self.lift_jax(q), *h)))
         self.timers = defaultdict(float)        # cumulative wall time per phase (s), see _tick
         self.counts = defaultdict(int)
 
@@ -142,7 +144,8 @@ class TPeelModel:
 
     def jit_cache_sizes(self):
         """Number of compiled variants of each jitted function (1 each = no recompilation)."""
-        return {k: f._cache_size() for k, f in (("grad", self._grad), ("jac", self._jac), ("energy", self._energy))}
+        return {k: f._cache_size() for k, f in (("grad", self._grad), ("jac", self._jac), ("energy", self._energy),
+                                                ("vg_q", self._vg_q))}
 
     # ---------------------------------------------------------------- energies
     def energy_full(self, U, *h):
@@ -199,6 +202,42 @@ class TPeelModel:
             U[2 * c["slaves"]] = us[:, 0]
             U[2 * c["slaves"] + 1] = us[:, 1]
         return U
+
+    def lift_jax(self, q):
+        """lift() in JAX (differentiable): r_q = grad_q E(lift(q)) = J^T r_U."""
+        U = q[: self.n_full]
+        for c in self.couplings:
+            th = q[c["theta"]]
+            if self.coupling == "finite":
+                A = jnp.array([[jnp.cos(th) - 1.0, -jnp.sin(th)], [jnp.sin(th), jnp.cos(th) - 1.0]])
+            else:
+                A = th * jnp.array([[0.0, -1.0], [1.0, 0.0]])
+            urp = U[2 * c["ref"]: 2 * c["ref"] + 2]
+            us = urp[None, :] + jnp.asarray(c["dX"]) @ A.T
+            U = U.at[2 * c["slaves"]].set(us[:, 0]).at[2 * c["slaves"] + 1].set(us[:, 1])
+        return U
+
+    def value_and_grad(self, q, h):
+        """(E, r_q) at q in one jitted call (S3c; same values as energy() and residual())."""
+        t0 = time.perf_counter()
+        E, r = self._vg_q(jnp.asarray(q), *h)
+        E, r = float(E), np.asarray(r)
+        self._tick("value_and_grad", t0)
+        return E, r
+
+    def direction(self, q, h, r, solve):
+        """Newton correction dq (n_q, zero at fixed dofs): K_ff dq_f = r_f (TPeelModel tangent)."""
+        K = self.tangent(q, h)
+        t0 = time.perf_counter()
+        A = K[self.free][:, self.free].tocsc()
+        t0 = self._tick("slice", t0)
+        dq = np.zeros(self.n_q)
+        dq[self.free] = solve(A, r[self.free])
+        self._tick("solve", t0)
+        return dq
+
+    def jit_cache_sizes_q(self):
+        return {"vg_q": self._vg_q._cache_size()}
 
     def lift_jacobian(self, q):
         """J = dU/dq (n_full x n_q, CSR)."""

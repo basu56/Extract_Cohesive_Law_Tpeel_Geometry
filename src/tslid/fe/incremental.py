@@ -130,6 +130,78 @@ def newton_ls(model, q, h, opt, log=None):
                    t_solve=t_sol, t_ls=t_ls, r=r)
 
 
+def default_solve(A, b):
+    """SciPy SuperLU on the system matrix (CSR or CSC)."""
+    return spla.spsolve(A.tocsc(), b)
+
+
+def newton_energy(model, q, h, opt, log=None):
+    """Newton with an energy-based Armijo line search (S3c item 2).  Returns (q, info).
+
+    The model provides value_and_grad(q, h) -> (E, r_q) (one fused jitted call) and
+    direction(q, h, r, solve) -> dq with K_ff dq_f = r_f.  Each trial point costs one value_and_grad;
+    the full step is tried first; the accepted trial's (E, r) are reused, so an iteration costs one
+    tangent + one solve + one (E, r) when the full step is accepted.  A trial is accepted if
+        E(q - s dq) <= E(q) - c s (r . dq)       (Armijo on the incremental potential; dq is a
+                                                  descent direction when r . dq > 0), or
+        ||r_f(q - s dq)||_2 <= (1 - c s) ||r_f(q)||_2   (residual decrease: the Newton direction is
+                                                  always a descent direction of ||r||^2, also with
+                                                  the indefinite softening tangent and at
+                                                  roundoff-level energy differences).
+    Convergence as newton_ls.
+    """
+    free, fixed = model.free, model.fixed
+    solve = opt.linsolve or default_solve
+    q = np.array(q, dtype=float)
+    res, ok, n_ls = [], False, 0
+    t_tan = t_sol = t_ls = 0.0
+    t0 = time.perf_counter()
+    E, r = model.value_and_grad(q, h)
+    t_ls += time.perf_counter() - t0
+    for it in range(opt.max_iter + 1):
+        rf = r[free]
+        f_ref = max(np.abs(r[fixed]).max() if fixed.size else 0.0, opt.f_floor)
+        res.append(float(np.abs(rf).max()))
+        if log:
+            log("    newton %d |r|=%.3e f_ref=%.3e E=%.12e" % (it, res[-1], f_ref, E))
+        if res[-1] <= opt.rtol * f_ref:
+            ok = True
+            break
+        if it == opt.max_iter or not np.isfinite(res[-1]):
+            break
+        t0, s0 = time.perf_counter(), model.timers["solve"]
+        dq = model.direction(q, h, r, solve)
+        ds = model.timers["solve"] - s0
+        t_sol += ds
+        t_tan += time.perf_counter() - t0 - ds
+        if not np.all(np.isfinite(dq)):
+            break
+        slope = float(r @ dq)
+        n0 = np.linalg.norm(rf)
+        step = 1.0
+        t0 = time.perf_counter()
+        for k in range(opt.ls_max + 1):
+            qt = q - step * dq
+            Et, rt = model.value_and_grad(qt, h)
+            if not opt.line_search or k == opt.ls_max:
+                break
+            if np.isfinite(Et) and np.all(np.isfinite(rt)):
+                if (slope > 0 and Et <= E - opt.ls_c * step * slope) or \
+                        np.linalg.norm(rt[free]) <= (1.0 - opt.ls_c * step) * n0:
+                    break
+            step *= 0.5
+            n_ls += 1
+        t_ls += time.perf_counter() - t0
+        q, E, r = qt, Et, rt
+        if step == 1.0 and np.abs(dq).max() <= opt.utol * max(np.abs(q).max(), 1e-300):
+            res.append(float(np.abs(r[free]).max()))
+            ok = True
+            break
+    q[model.slave_dofs] = model.lift(q)[model.slave_dofs]
+    return q, dict(iterations=it, residuals=res, converged=ok, ls_steps=n_ls, t_tangent=t_tan,
+                   t_solve=t_sol, t_ls=t_ls, r=r, E=E)
+
+
 def run(model, T, dt0, dtmin, dtmax, opt=None, record=None, verbose=False, max_increments=10 ** 6,
         on_increment=None, newton=None):
     """Integrate the step 0 -> T.  ``record(model, t, q, hist, h_used, r)`` returns a dict stored per

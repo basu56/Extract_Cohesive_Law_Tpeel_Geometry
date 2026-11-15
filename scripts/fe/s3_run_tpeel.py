@@ -24,7 +24,8 @@ import time
 import numpy as np
 
 import tslid.fe  # noqa: F401
-from tslid.fe.incremental import SolverOptions, run
+from tslid.fe.incremental import SolverOptions, newton_energy, newton_ls, run
+from tslid.fe.linsolve import SOLVERS
 from tslid.fe.tpeel import TPeelModel
 
 ap = argparse.ArgumentParser()
@@ -38,6 +39,11 @@ ap.add_argument("--tag", default=None)
 ap.add_argument("--max-increments", type=int, default=10 ** 6)
 ap.add_argument("--verbose", action="store_true")
 ap.add_argument("--summary-every", type=int, default=50)
+ap.add_argument("--newton", default="residual", choices=["residual", "energy"],
+                help="residual: S3b newton_ls; energy: S3c newton_energy (jitted q-energy, Armijo)")
+ap.add_argument("--assembly", default="jacfwd", choices=["jacfwd", "element"])
+ap.add_argument("--condense", action="store_true", help="condense the incompatible modes (element assembly)")
+ap.add_argument("--linsolve", default="superlu", choices=sorted(SOLVERS))
 ap.add_argument("--cprofile", action="store_true", help="also write <job>_<tag>_cprofile.txt (top 40 by cumtime)")
 a = ap.parse_args()
 job = os.path.basename(a.deck)[:-4]
@@ -46,6 +52,13 @@ os.makedirs(a.outdir, exist_ok=True)
 
 t0 = time.perf_counter()
 m = TPeelModel(a.deck, kinematics=a.kinematics, frame=a.frame, history=a.history)
+M = m
+if a.assembly == "element":
+    from tslid.fe.assembly import ElementSystem
+    M = ElementSystem(m, condense=a.condense)
+    if a.newton != "energy":
+        raise SystemExit("--assembly element needs --newton energy")
+solver = SOLVERS[a.linsolve]()
 t_setup = time.perf_counter() - t0
 st = m.deck.step["static"]
 print(f"{job}: n_q {m.n_q} free {len(m.free)} colours {m.n_colors} law {m.law_kind} {m.law_params} "
@@ -55,11 +68,16 @@ print(f"{job}: n_q {m.n_q} free {len(m.free)} colours {m.n_colors} law {m.law_ki
 t1 = time.perf_counter()
 h = m.frozen_args(m.zero_history(), st["dt0"])
 q0 = m.apply_bc(m.zero_q(), 0.0)
-m.tangent(q0, h, return_residual=True)
-m.residual(q0, h)
+if a.newton == "energy":
+    E0, r0 = M.value_and_grad(q0, h)
+    M.direction(q0, h, r0, solver)
+else:
+    m.tangent(q0, h, return_residual=True)
+    m.residual(q0, h)
 t_jit = time.perf_counter() - t1
-m.timers.clear()
-m.counts.clear()
+for X in {id(m): m, id(M): M}.values():
+    X.timers.clear()
+    X.counts.clear()
 
 
 def rec(m, t, q, hist, h, r):
@@ -68,7 +86,7 @@ def rec(m, t, q, hist, h, r):
                 Dmax=float(np.max(np.asarray(hist["D"]))), n_failed=int(np.sum(np.asarray(hist["D"]) >= 1.0)))
 
 
-opt = SolverOptions(rtol=a.rtol)
+opt = SolverOptions(rtol=a.rtol, linsolve=solver)
 path = os.path.join(a.outdir, f"{job}_{tag}_jax.csv")
 jpath = os.path.join(a.outdir, f"{job}_{tag}_jax.json")
 LOGF = ("dt", "newton", "passes", "cutbacks", "ls", "wall", "t_tangent", "t_solve", "t_history", "t_ls")
@@ -90,8 +108,11 @@ def summary(complete, res=None):
              t_tangent=float(sum(l.t_tangent for l in L)), t_solve=float(sum(l.t_solve for l in L)),
              t_history=float(sum(l.t_history for l in L)), t_ls=float(sum(l.t_ls for l in L)),
              t_increments=float(sum(l.wall for l in L)), t_io=state["t_io"],
-             timers={k: float(v) for k, v in m.timers.items()}, counts=dict(m.counts),
-             jit_cache=m.jit_cache_sizes(),
+             newton=a.newton, assembly=a.assembly, condense=a.condense, linsolve=a.linsolve,
+             n_sys=int(getattr(M, "n_sys", len(m.free))),
+             timers={k: float(v) for k, v in {**m.timers, **M.timers}.items()},
+             counts={**m.counts, **M.counts},
+             jit_cache={**m.jit_cache_sizes(), **(M.jit_cache_sizes() if M is not m else {})},
              P_peak=float(max(r["P"] for r in rows)) if rows else None,
              delta_peak=float(max(rows, key=lambda r: r["P"])["delta"]) if rows else None,
              threads=os.environ.get("XLA_FLAGS", ""), omp=os.environ.get("OMP_NUM_THREADS", ""))
@@ -128,8 +149,9 @@ if a.cprofile:
     import pstats
     prof = cProfile.Profile()
     prof.enable()
-res = run(m, st["T"], st["dt0"], st["dtmin"], st["dtmax"], opt, record=rec, verbose=a.verbose,
-          max_increments=a.max_increments, on_increment=on_inc)
+res = run(M, st["T"], st["dt0"], st["dtmin"], st["dtmax"], opt, record=rec, verbose=a.verbose,
+          max_increments=a.max_increments, on_increment=on_inc,
+          newton=newton_energy if a.newton == "energy" else newton_ls)
 if a.cprofile:
     prof.disable()
     buf = io.StringIO()
