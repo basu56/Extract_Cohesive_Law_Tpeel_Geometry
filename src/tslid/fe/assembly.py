@@ -73,6 +73,36 @@ def _separations(u, c, frame, N):
     return d @ n - Gq @ n0, d @ t - Gq @ t0
 
 
+def inv4(m):
+    """Batched closed-form inverse of 4 x 4 matrices (..., 4, 4) by 2 x 2 cofactor expansion
+    (vectorised; XLA's batched LAPACK solve is slow for many tiny systems on CPU).  Accuracy is
+    checked through the condensed Newton step (tests/fe/test_s3c_assembly.py)."""
+    a = [[m[..., i, j] for j in range(4)] for i in range(4)]
+    s0 = a[0][0] * a[1][1] - a[1][0] * a[0][1]
+    s1 = a[0][0] * a[1][2] - a[1][0] * a[0][2]
+    s2 = a[0][0] * a[1][3] - a[1][0] * a[0][3]
+    s3 = a[0][1] * a[1][2] - a[1][1] * a[0][2]
+    s4 = a[0][1] * a[1][3] - a[1][1] * a[0][3]
+    s5 = a[0][2] * a[1][3] - a[1][2] * a[0][3]
+    c5 = a[2][2] * a[3][3] - a[3][2] * a[2][3]
+    c4 = a[2][1] * a[3][3] - a[3][1] * a[2][3]
+    c3 = a[2][1] * a[3][2] - a[3][1] * a[2][2]
+    c2 = a[2][0] * a[3][3] - a[3][0] * a[2][3]
+    c1 = a[2][0] * a[3][2] - a[3][0] * a[2][2]
+    c0 = a[2][0] * a[3][1] - a[3][0] * a[2][1]
+    det = s0 * c5 - s1 * c4 + s2 * c3 + s3 * c2 - s4 * c1 + s5 * c0
+    b = [[a[1][1] * c5 - a[1][2] * c4 + a[1][3] * c3, -a[0][1] * c5 + a[0][2] * c4 - a[0][3] * c3,
+          a[3][1] * s5 - a[3][2] * s4 + a[3][3] * s3, -a[2][1] * s5 + a[2][2] * s4 - a[2][3] * s3],
+         [-a[1][0] * c5 + a[1][2] * c2 - a[1][3] * c1, a[0][0] * c5 - a[0][2] * c2 + a[0][3] * c1,
+          -a[3][0] * s5 + a[3][2] * s2 - a[3][3] * s1, a[2][0] * s5 - a[2][2] * s2 + a[2][3] * s1],
+         [a[1][0] * c4 - a[1][1] * c2 + a[1][3] * c0, -a[0][0] * c4 + a[0][1] * c2 - a[0][3] * c0,
+          a[3][0] * s4 - a[3][1] * s2 + a[3][3] * s0, -a[2][0] * s4 + a[2][1] * s2 - a[2][3] * s0],
+         [-a[1][0] * c3 + a[1][1] * c1 - a[1][2] * c0, a[0][0] * c3 - a[0][1] * c1 + a[0][2] * c0,
+          -a[3][0] * s3 + a[3][1] * s1 - a[3][2] * s0, a[2][0] * s3 - a[2][1] * s1 + a[2][2] * s0]]
+    inv = jnp.stack([jnp.stack(row, axis=-1) for row in b], axis=-2)
+    return inv / det[..., None, None]
+
+
 class _Group:
     """Elements of one kind with a common local layout.
 
@@ -297,14 +327,19 @@ class ElementSystem:
                 re = rr[g.qidx_j]                                        # assembled residual at local slots
                 ks, is_ = g.k_slots, g.i_slots
                 if is_.size:
-                    Kkk = Ke[:, ks][:, :, ks]
-                    Kki = Ke[:, ks][:, :, is_]
-                    Kii = Ke[:, is_][:, :, is_]
-                    X = jnp.linalg.solve(Kii, jnp.concatenate([Ke[:, is_][:, :, ks], re[:, is_, None]], axis=2))
-                    Kc = Kkk - Kki @ X[:, :, :-1]
+                    nk = len(ks)
+                    perm = np.r_[ks, is_]
+                    if not np.array_equal(perm, np.arange(len(perm))):     # coupled group: IM slots last
+                        Ke, re = Ke[:, perm][:, :, perm], re[:, perm]
+                    Kkk, Kki = Ke[:, :nk, :nk], Ke[:, :nk, nk:]
+                    Kik, Kii = Ke[:, nk:, :nk], Ke[:, nk:, nk:]
+                    Ai = inv4(Kii)
+                    XK = jnp.einsum("eij,ejk->eik", Ai, Kik)                    # K_ii^-1 K_ik
+                    Xr = jnp.einsum("eij,ej->ei", Ai, re[:, nk:])                # K_ii^-1 r_i
+                    Kc = Kkk - jnp.einsum("eij,ejk->eik", Kki, XK)
                     # condensed RHS: r_k - K_ki K_ii^-1 r_i, the r_k part enters once via the global r
-                    rhs = rhs.at[g.rpos.ravel()].add((-(Kki @ X[:, :, -1:])[..., 0]).ravel())
-                    aux.append((X[:, :, :-1], X[:, :, -1]))
+                    rhs = rhs.at[g.rpos.ravel()].add((-jnp.einsum("eij,ej->ei", Kki, Xr)).ravel())
+                    aux.append((XK, Xr))
                 else:
                     Kc = Ke
                     aux.append(None)

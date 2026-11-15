@@ -13,7 +13,7 @@ factorization of a fixed pattern) reuse it across Newton iterations and incremen
                 solve (phase 23) per call.
 - pardiso_sym:  same, real symmetric indefinite (mtype -2) on the upper triangle; valid because the
                 Newton matrix is the Hessian of the incremental potential (symmetric to roundoff).
-UMFPACK and CHOLMOD need SuiteSparse (not available on Negishi without extra installs): not included.
+UMFPACK and CHOLMOD need SuiteSparse, which Negishi does not provide (no module, no conda): not benchmarked.
 """
 import numpy as np
 import scipy.sparse as sps
@@ -57,7 +57,7 @@ class Pardiso:
 
     def __init__(self):
         _find_mkl_rt()
-        import pypardiso                                    # optional dependency
+        import pypardiso                                    # fe extra (x86_64)
         self.ps = pypardiso.PyPardisoSolver(mtype=self.mtype)
         # iparm(1) = 0: MKL defaults for this mtype (mtype 11: METIS ordering, scaling + weighted
         # matching, pivot perturbation 1e-13; mtype -2: Bunch-Kaufman, perturbation 1e-8)

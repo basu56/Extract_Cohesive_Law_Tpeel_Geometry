@@ -20,6 +20,7 @@ fe = [
     "scipy",
     "matplotlib",
     "pytest",
+    "pypardiso==0.4.7; platform_machine == 'x86_64'",   # S3c: MKL PARDISO (src/tslid/fe/linsolve.py)
 ]
 
 [build-system]

@@ -137,7 +137,8 @@ def summary(complete, res=None):
              P_peak=float(max(r["P"] for r in rows)) if rows else None,
              delta_peak=float(max(rows, key=lambda r: r["P"])["delta"]) if rows else None,
              threads=os.environ.get("XLA_FLAGS", ""), omp=os.environ.get("OMP_NUM_THREADS", ""),
-             affinity=len(os.sched_getaffinity(0)))
+             affinity=len(os.sched_getaffinity(0)),
+             linsolve_analyses=getattr(solver, "n_analysis", None), linsolve_perturbed=getattr(solver, "n_perturbed", None))
     with open(jpath + ".tmp", "w") as fh:
         json.dump(s, fh, indent=2)
     os.replace(jpath + ".tmp", jpath)
