@@ -1,5 +1,7 @@
 # Extract_Cohesive_Law_Tpeel_Geometry
 
+[![tests](https://github.com/basu56/Extract_Cohesive_Law_Tpeel_Geometry/actions/workflows/tests.yml/badge.svg)](https://github.com/basu56/Extract_Cohesive_Law_Tpeel_Geometry/actions/workflows/tests.yml)
+
 Identifiability and AI-assisted recovery of cohesive traction–separation laws from
 T-peel load–displacement data (PhD research, Purdue AAE).
 

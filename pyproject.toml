@@ -1,0 +1,33 @@
+# Package metadata for the analysis / differentiable-solver environment (uv).
+#
+# The ABAQUS-side scripts (src/tslid/laws.py, build_tpeel_inp.py, extractors) do NOT
+# install this package: they put src/ on sys.path and run under the cluster's system
+# Python 3.6 or `abaqus python`. requires-python therefore only constrains the uv
+# environment, which is the one that needs the `fe` extra (tatva requires Python >= 3.11).
+[project]
+name = "tslid"
+version = "0.1.0"
+description = "Identifiability of cohesive traction-separation laws from T-peel load-displacement data"
+requires-python = ">=3.11"
+dependencies = []
+
+[project.optional-dependencies]
+fe = [
+    "jax",
+    "tatva==0.11.6",      # pinned (D19): API is young, module renames in 0.11.5
+    "jax-autovmap",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "pytest",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/tslid"]
+
+[tool.pytest.ini_options]
+markers = ["slow: takes more than ~60 s; excluded in CI (-m 'not slow')"]

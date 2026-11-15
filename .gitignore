@@ -28,3 +28,4 @@ __pycache__/
 # large data
 results/raw/
 *.h5
+.pytest_cache/

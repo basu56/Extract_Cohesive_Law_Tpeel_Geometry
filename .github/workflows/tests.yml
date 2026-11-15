@@ -1,0 +1,21 @@
+# CPU test suite: tslid.laws unit tests + differentiable-solver tests (S0+).
+# Slow tests (> ~60 s) are marked `slow` and skipped here; run them on Negishi.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.9.5"
+      - name: Sync environment (Python from .python-version, versions from uv.lock)
+        run: uv sync --locked --extra fe
+      - name: Run tests
+        run: uv run --locked --extra fe pytest tests/test_laws.py tests/fe -m "not slow" -v
