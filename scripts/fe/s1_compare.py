@@ -7,7 +7,7 @@ Reads <rundir>/<job>_nodes.csv (scripts/fe/extract_cantilever_odb.py) and
 <rundir>/tpeel_sw_s40_hist_2000001.csv.  Writes to outdir:
     abaqus_reference.csv   ABAQUS tip quantities per case and frame (used by tests/fe)
     s1_linear.csv          test 2-3: Q4 / Q4IM vs ABAQUS (and Timoshenko), ny = 2, 4, 8, 20, skew
-    s1_nlgeom.csv          test 4: SVK Q4IM vs ABAQUS NLGEOM per increment
+    s1_nlgeom.csv          test 4: Q4IM (SVK and Hencky) vs ABAQUS NLGEOM per increment
     s1_timing.csv          test 5: wall time per Newton solve
     tpeel_rotation.csv     T-peel load-point rotation UR3 vs delta (sw_s40)
     s1_bulk.png/.pdf       figure
@@ -97,24 +97,27 @@ for job, (ny, mkw, lkw) in CASES.items():
 job, ny, mkw, lkw, ninc = NL
 ab = abaqus_tip(job, ny, mkw)
 ref_rows += ab
-t0 = time.perf_counter()
-r = cantilever(ny, "Q4IM", "svk", **mkw, **lkw, n_inc=ninc)
-timing.append(dict(case=job, element="Q4IM", kinematics="svk", n_dof=r["n_dof"], n_colors=r["n_colors"],
-                   newton_iters=int(np.sum(r["iters"])), t_first_call=time.perf_counter() - t0,
-                   t_solve_after_jit=float(np.median(r["t_solve"][1:])), host=platform.node()))
 rl = cantilever(ny, "Q4IM", "linear", **mkw, **lkw, n_inc=1)
 nl_rows = []
-for k, a in enumerate(ab):
-    assert abs(a["lam"] - r["lam"][k]) < 1e-6
-    nl_rows.append(dict(frame=a["frame"], lam=a["lam"], P=a["lam"] * lkw["P"], theta_abq=a["theta"], theta_jax=r["theta"][k],
-                        u_tip_abq=a["u_tip"], u_tip_jax=r["u_tip"][k], err_u_tip=rel(r["u_tip"][k], a["u_tip"]),
-                        err_u_tip_vs_v=(r["u_tip"][k] - a["u_tip"]) / abs(a["v_tip"]),
-                        v_tip_abq=a["v_tip"], v_tip_jax=r["v_tip"][k], err_v_tip=rel(r["v_tip"][k], a["v_tip"]),
-                        M_abq=a["M_clamp"], M_jax=r["M_clamp"][k], err_M=rel(r["M_clamp"][k], a["M_clamp"]),
-                        err_theta=rel(r["theta"][k], a["theta"]),
-                        nl_effect_v=rel(a["v_tip"], a["lam"] * rl["v_tip"][-1])))
-    print(f"NL k={a['frame']:2d} theta={a['theta']:.4f} err_v={nl_rows[-1]['err_v_tip']:+.2e} "
-          f"err_u={nl_rows[-1]['err_u_tip']:+.2e} err_M={nl_rows[-1]['err_M']:+.2e}", flush=True)
+for kin in ("svk", "hencky"):
+    t0 = time.perf_counter()
+    r = cantilever(ny, "Q4IM", kin, **mkw, **lkw, n_inc=ninc)
+    timing.append(dict(case=job, element="Q4IM", kinematics=kin, n_dof=r["n_dof"], n_colors=r["n_colors"],
+                       newton_iters=int(np.sum(r["iters"])), t_first_call=time.perf_counter() - t0,
+                       t_solve_after_jit=float(np.median(r["t_solve"][1:])), host=platform.node()))
+    for k, a in enumerate(ab):
+        assert abs(a["lam"] - r["lam"][k]) < 1e-6
+        nl_rows.append(dict(kinematics=kin, frame=a["frame"], lam=a["lam"], P=a["lam"] * lkw["P"],
+                            theta_abq=a["theta"], theta_jax=r["theta"][k],
+                            u_tip_abq=a["u_tip"], u_tip_jax=r["u_tip"][k], err_u_tip=rel(r["u_tip"][k], a["u_tip"]),
+                            err_u_tip_vs_v=(r["u_tip"][k] - a["u_tip"]) / abs(a["v_tip"]),
+                            v_tip_abq=a["v_tip"], v_tip_jax=r["v_tip"][k], err_v_tip=rel(r["v_tip"][k], a["v_tip"]),
+                            M_abq=a["M_clamp"], M_jax=r["M_clamp"][k], err_M=rel(r["M_clamp"][k], a["M_clamp"]),
+                            err_theta=rel(r["theta"][k], a["theta"]),
+                            nl_effect_v=rel(a["v_tip"], a["lam"] * rl["v_tip"][-1])))
+        x = nl_rows[-1]
+        print(f"NL {kin:6s} k={a['frame']:2d} theta={a['theta']:.4f} err_v={x['err_v_tip']:+.2e} "
+              f"err_u={x['err_u_tip']:+.2e} err_u/v={x['err_u_tip_vs_v']:+.2e} err_M={x['err_M']:+.2e}", flush=True)
 
 write("abaqus_reference.csv", ref_rows, ["case", "frame", "lam", "u_tip", "v_tip", "theta", "R_tip", "M_clamp"])
 write("s1_linear.csv", lin_rows, list(lin_rows[0].keys()))
@@ -140,12 +143,16 @@ for kind, mk in (("Q4", "s"), ("Q4IM", "o")):
 ax[0].axhline(5e-4, color="0.5", ls=":", label="threshold 0.05 %")
 ax[0].set(xlabel="elements through thickness $n_y$", ylabel=r"|tip deflection error|", xticks=[2, 4, 8, 20])
 ax[0].legend(frameon=False, fontsize=8)
-th = np.array([x["theta_abq"] for x in nl_rows])
-for key, lab in (("err_v_tip", "$v_{tip}$"), ("err_u_tip_vs_v", r"$u_{tip}$ (rel. to $|v_{tip}|$)"), ("err_M", "clamp moment")):
-    ax[1].plot(th, [abs(x[key]) for x in nl_rows], "o-", mfc="w", ms=4, label=lab)
+for kin, ls in (("svk", "-"), ("hencky", "--")):
+    rr = [x for x in nl_rows if x["kinematics"] == kin]
+    th = [x["theta_abq"] for x in rr]
+    for key, lab, c in (("err_v_tip", "$v_{tip}$", "C0"), ("err_u_tip", "$u_{tip}$", "C1"), ("err_M", "clamp moment", "C2")):
+        ax[1].plot(th, [abs(x[key]) for x in rr], "o" + ls, color=c, mfc="w", ms=3.5, label=f"{lab}, {kin.upper()}")
 ax[1].axhline(1e-3, color="0.5", ls=":", label="threshold 0.1 %")
 ax[1].set_yscale("log")
-ax[1].set(xlabel="tip rotation (rad)", ylabel="|SVK Q4IM - ABAQUS| (relative)")
+ax[1].axvline(0.0325, color="0.6", lw=0.8)
+ax[1].text(0.0335, 2e-9, "T-peel max", fontsize=7, color="0.4")
+ax[1].set(xlabel="tip rotation (rad)", ylabel="|Q4IM - ABAQUS CPE4I| (relative)")
 ax[1].legend(frameon=False, fontsize=8)
 fig.tight_layout()
 for ext in ("png", "pdf"):

@@ -46,4 +46,22 @@ def psi_svk(H, lam, mu):
     return _iso(E, lam, mu)
 
 
-ENERGIES = {"linear": psi_linear, "svk": psi_svk}
+def psi_hencky(H, lam, mu, order=10):
+    """Hencky (logarithmic-strain) plane-strain energy density (MPa).
+
+    psi = lam/2 tr(h)^2 + mu h:h with h = ln(U) = 1/2 ln(C), C = F^T F.  Its Kirchhoff stress
+    is linear in log strain, the closest hyperelastic counterpart of ABAQUS's hypoelastic NLGEOM
+    update of ``*Elastic`` [I].  ln(C) = ln(I + A), A = C - I, by its power series truncated at
+    ``order`` terms: no eigen-decomposition, so it is smooth and NaN-free at H = 0.  Truncation
+    error ~ |A|^(order+1)/(order+1): < 1e-13 relative for strains up to ~5 %; not for large strain.
+    """
+    Ht = jnp.swapaxes(H, -1, -2)
+    A = H + Ht + Ht @ H                                     # C - I
+    term, lnC = A, A
+    for k in range(2, order + 1):
+        term = term @ A
+        lnC = lnC + ((-1) ** (k + 1) / k) * term
+    return _iso(0.5 * lnC, lam, mu)
+
+
+ENERGIES = {"linear": psi_linear, "svk": psi_svk, "hencky": psi_hencky}
