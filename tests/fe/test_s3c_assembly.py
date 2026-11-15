@@ -112,3 +112,38 @@ def test_newton_energy_matches_newton_ls(weak_deck, assembly):
     assert np.abs(Pa - Pb).max() <= 1e-9 * np.abs(Pa).max()
     assert max(r["D"] for r in b.records) > 0.0
     assert M.jit_cache_sizes()[("vg_q" if assembly == "jacfwd" else "vg")] == 1   # no recompilation
+
+
+def test_abaqus_like_outputs_and_schedule_replay(weak_deck, tmp_path):
+    """tpeel_output.TPeelWriter: energy balance closes, damage dissipates, the files carry the
+    extract_tpeel_odb.py names; run(schedule=...) reproduces the increment times of another run."""
+    import csv
+    import json
+    from tslid.fe.tpeel_output import TPeelWriter
+    m = TPeelModel(weak_deck)
+    S = ElementSystem(m, condense=True)
+    st = m.deck.step["static"]
+    wr = TPeelWriter(S, weak_deck[:-4] + ".json", str(tmp_path), "w")
+
+    def rec(mm, t, q, hist, h, r):
+        wr.add(t, q, hist, float(r[m.out["rp1_u2"]]), float(q[m.out["rp1_u2"]] - q[m.out["rp2_u2"]]))
+        return dict(t=t, P=float(r[m.out["rp1_u2"]]))
+
+    a = run(S, st["T"], st["dt0"], st["dtmin"], st["dtmax"], SolverOptions(), record=rec, max_increments=25,
+            newton=newton_energy)
+    wr.close(completed=False)
+    rows = list(csv.DictReader(open(tmp_path / "w_response.csv")))
+    for k in ("time", "delta", "P", "W_ext", "ALLSE", "ALLPD", "ALLDMD", "ALLVD", "ALLCD"):
+        assert k in rows[0]
+    last = {k: float(v) for k, v in rows[-1].items()}
+    assert last["ALLDMD"] > 0.01 * last["W_ext"]
+    bal = abs(last["W_ext"] - last["ALLSE"] - last["ALLDMD"] - last["ALLCD"]) / last["W_ext"]
+    assert bal <= 1e-2, bal          # E4 tolerance; 2.5e-3 here: trapezoid on Y dD over large damage steps
+    z = np.load(tmp_path / "w_profiles.npz")
+    assert z["opening"].shape == (len(rows), len(z["x_face"]))
+    assert json.load(open(tmp_path / "w.json"))["solver"] == "tslid.fe"
+    assert not (tmp_path / "w.sta").exists()                               # not completed
+    times = [r["t"] for r in a.records[1:]]
+    b = run(S, st["T"], st["dt0"], st["dtmin"], st["dtmax"], SolverOptions(rtol=1e-6), max_increments=25,
+            newton=newton_energy, schedule=times)
+    assert [l.t for l in b.log] == pytest.approx(times, rel=1e-13)
