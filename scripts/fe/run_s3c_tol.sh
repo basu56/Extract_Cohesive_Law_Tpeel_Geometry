@@ -24,6 +24,6 @@ for r in 1e-9 1e-8 1e-7 1e-6 1e-5 1e-4; do
   $R --tag tol_${r}_rep  --rtol $r --schedule $DIR/c_s40_tol_ref_jax.csv --no-abaqus-out | tail -2
   $R --tag tol_${r}_free --rtol $r --no-abaqus-out | tail -2
 done
-python3 src/tslid/analysis/energy_checks.py $DIR --pattern 'c_s40_tol_ref' --out energy_tol_ref.csv
-python3 src/tslid/analysis/energy_checks.py $DIR --pattern 'c_s40' --out energy_abaqus.csv
+.venv/bin/python src/tslid/analysis/energy_checks.py $DIR --pattern 'c_s40_tol_ref' --out energy_tol_ref.csv
+.venv/bin/python src/tslid/analysis/energy_checks.py $DIR --pattern 'c_s40' --out energy_abaqus.csv
 echo "$(date) done"
