@@ -1,7 +1,7 @@
 """s3c_summary.py -- S3c tables: coarse-run gains, tolerance study, benchmarks.  Light.
 
 Units: mm, N, s.
-    python scripts/fe/s3c_summary.py <rundir> [outdir=results/solver/S3_tpeel]
+    [S3C_REF=<tag>] python scripts/fe/s3c_summary.py <rundir> [outdir=results/solver/S3_tpeel] [prefix=s3c]
 
 Inputs in <rundir> (scripts/fe/run_s3c.sh, run_s3c_bench.sh; ABAQUS coarse run linked from
 solver_S3b_coarse): c_s40_<tag>_jax.csv/.json, c_s40_response.csv, c_s40.msg, bench_*_t<n>.json.
@@ -29,6 +29,7 @@ from tslid.analysis.compare_ld import load as cld_load  # noqa: E402
 
 RUN = sys.argv[1]
 OUT = sys.argv[2] if len(sys.argv) > 2 else "results/solver/S3_tpeel"
+PFX = sys.argv[3] if len(sys.argv) > 3 else "s3c"
 REF = os.environ.get("S3C_REF", "elc2")       # reference tslid.fe run (tag) for *_ref columns
 
 
@@ -81,13 +82,15 @@ for js in sorted(glob.glob(os.path.join(RUN, "c_s40_*_jax.json"))):
         if s.get("schedule"):                                  # same increments: compare at equal times
             r0 = {round(t, 10): pp for t, pp in zip(*[rd(os.path.join(RUN, os.path.basename(s["schedule"])))[c]
                                                     for c in ("time", "P")])}
-            same = [abs(pp - r0[round(t, 10)]) for t, pp in zip(d["time"], d["P"]) if round(t, 10) in r0]
-            row["max_dP_ref_same_t"] = float(max(same) / Ppk) if same else np.nan
+            same = [(abs(pp - r0[round(t, 10)]), dd) for t, pp, dd in zip(d["time"], d["P"], d["delta"])
+                    if round(t, 10) in r0]
+            row["max_dP_ref_same_t"] = float(max(x for x, _ in same) / Ppk) if same else np.nan
+            row["max_dP_ref_same_t_win"] = float(max(x for x, dd in same if dd <= d_win) / Ppk) if same else np.nan
     rows.append(row)
 keys = []
 for r in rows:
     keys += [k for k in r if k not in keys]
-with open(os.path.join(OUT, "s3c_runs.csv"), "w", newline="") as fh:
+with open(os.path.join(OUT, PFX + "_runs.csv"), "w", newline="") as fh:
     w = csv.DictWriter(fh, fieldnames=keys)
     w.writeheader()
     for r in rows:
@@ -115,7 +118,7 @@ if brows:
     keys = []
     for r in brows:
         keys += [k for k in r if k not in keys]
-    with open(os.path.join(OUT, "s3c_bench.csv"), "w", newline="") as fh:
+    with open(os.path.join(OUT, PFX + "_bench.csv"), "w", newline="") as fh:
         w = csv.DictWriter(fh, fieldnames=keys)
         w.writeheader()
         for r in brows:
