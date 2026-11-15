@@ -14,16 +14,21 @@ the same column names, so that src/tslid/analysis/energy_checks.py runs on them 
 Energies per converged increment n -> n+1 (W = width; per quadrature point, weights w L/2):
     W_ext   trapezoid of P d(delta), as extract_tpeel_odb.py
     ALLSE   bulk strain energy + W sum [(1 - Dv) K0/2 dm^2 + K0/2 <-dn>^2]   (stored, current Dv)
-    ALLDMD  W sum G_d(dmax), the energy the inviscid law dissipates up to dmax, in closed form:
-            damage grows only while dm = dmax, where Y = K0/2 dm^2, so
-            G_d(d) = int_0^d Y dD = K0 d0^2/2 + F(d) - (1 - D(d)) K0 d^2/2  (d > d0; 0 below),
-            F the envelope integral of the law (exact, independent of the increment size)
-    ALLCD   sum of W sum 1/2 (Y_n + Y_n+1) ((Dv - D)_n+1 - (Dv - D)_n),   Y = K0/2 dm^2
-            (viscous regularisation: the lag Dv - D; trapezoid in time)
+    The cohesive traction is split into the inviscid law and a viscous overstress,
+        t = (1 - Dv) K0 d+ = (1 - D) K0 d+ + (D - Dv) K0 d+,   d+ = (<dn>, ds),  Y = K0/2 dm^2,
+    and, because damage grows only while dm = dmax, int (1 - D) K0 d+ . dd = (1 - D) Y + G_d(dmax) with
+        G_d(d) = int_0^d Y dD = K0 d0^2/2 + F(d) - (1 - D(d)) K0 d^2/2  (d > d0; 0 below),
+    F the envelope integral of the law (closed form, independent of the increment size).  Hence
+    ALLDMD  W sum [G_d(dmax) - (D - Dv) Y]    (inviscid dissipation minus the energy that the lagging
+            Dv still stores; equals G_d once Dv has caught up)
+    ALLCD   W sum int (D - Dv) K0 d+ . dd     (work of the viscous overstress, >= 0 while loading;
+            trapezoid in time per point)
+    so that ALLSE_coh + ALLDMD + ALLCD = int t . dd exactly in the continuum.
     ALLPD = ALLVD = 0; ALLWK = W_ext.
-[I] This split of the dissipation is ours (the inviscid law's dissipation at the current dmax, and
-the rest of the energy released through Dv); ABAQUS's internal split is not documented to us.
-The sum ALLDMD + ALLCD is the total cohesive dissipation either way.
+[I] This split is ours; ABAQUS's internal split is not documented to us.  History of the definition:
+S3c used ALLDMD = W sum G_d(dmax) and a trapezoid ALLCD = int Y d(Dv - D); that double-counts the
+energy still stored through a lagging Dv and failed E4 (1.9e-2) at the end-of-ligament collapse of
+as_s21_a7 (S3e).  Replaced 2026-11-15 (SOLVER_LOG S3d/S3e).
 Opening: U2(IFACE_U) - U2(IFACE_L), node pairs matched by x (as the extractor).  traction_tip: normal
 cohesive traction per element (mean of its two points); sdeg_tip: max D per element.
 """
@@ -82,16 +87,19 @@ class TPeelWriter:
         D, Dv = np.asarray(hist["D"]), np.asarray(hist["Dv"])
         K0 = self.m.K0
         se_coh = float(np.sum(self.wq * ((1.0 - Dv) * Y + 0.5 * K0 * np.maximum(-dn, 0.0) ** 2)))
+        lag = D - Dv
+        on, os_ = lag * K0 * np.maximum(dn, 0.0), lag * K0 * ds                # viscous overstress
         if self.prev is not None:
-            Pp, dp, Yp, Dp, Dvp = self.prev
+            Pp, dp, dnp, dsp, onp, osp = self.prev
             self.acc["W_ext"] += 0.5 * (P + Pp) * (delta - dp)
-            self.acc["ALLCD"] += float(np.sum(self.wq * 0.5 * (Y + Yp) * ((Dv - D) - (Dvp - Dp))))
-        self.prev = (P, delta, Y, D, Dv)
+            self.acc["ALLCD"] += float(np.sum(self.wq * 0.5 * ((on + onp) * (dn - dnp) + (os_ + osp) * (ds - dsp))))
+        self.prev = (P, delta, dn, ds, on, os_)
         U = self.m.lift(q)
         op = U[self.iu] - U[self.il]
         row = dict(time=t, delta=delta, P=P, delta_mouth=float(op[0]) if self.x_face[0] < 1e-6 else np.nan,
                    W_ext=self.acc["W_ext"], ALLSE=self.S.bulk_energy(q) + se_coh, ALLPD=0.0,
-                   ALLDMD=self._allmd(np.asarray(hist["dmax"])), ALLVD=0.0, ALLCD=self.acc["ALLCD"],
+                   ALLDMD=self._allmd(np.asarray(hist["dmax"])) - float(np.sum(self.wq * lag * Y)), ALLVD=0.0,
+                   ALLCD=self.acc["ALLCD"],
                    ALLWK=self.acc["W_ext"])
         tn, _ = traction(dn, ds, Dv, K0)
         self.open.append(op)
