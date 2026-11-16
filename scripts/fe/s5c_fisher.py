@@ -26,7 +26,8 @@ Trade-off direction d(ln sigc)/d alpha at (sigc 40, alpha 0), compared in the (l
   F (i) and (ii) (and with ln Gc, ln K0 included: its (ln sigc, alpha) part).
 Cross-check (S5c item 4): central FD of the sweep curves around sigc 40, alpha 0 vs S5a dP/dtheta,
 bin-averaged, per window.
-Writes s5c_fisher.csv, s5c_stability.csv, s5c_directions.csv, s5c_fdcheck.csv, s5c.png/.pdf.
+Writes s5c_fisher.csv, s5c_stability.csv, s5c_directions.csv, s5c_rayleigh.csv (v^T F v / lambda_min of each
+candidate direction), s5c_fdcheck.csv, s5c.png/.pdf.
 """
 import csv
 import os
@@ -209,6 +210,24 @@ if ref_dirs:
     for r in drows:
         r["angle_to_sweep_isopeak_deg"] = angle(np.array([r["v_lnsigc"], r["v_alpha"]]), v0)
 write(drows, "s5c_directions.csv")
+
+# how weak is each candidate direction under F?  Rayleigh quotient v^T F v / lambda_min of the same F,
+# v = (d ln sigc, d alpha) embedded in theta3 with d ln Gc = 0 (and in the (ln sigc, alpha) block)
+rq = []
+if "A_rtol1e-6" in Z:
+    for kn in ("i_prepeak", "ii_full_filtered", "iii_full_raw"):
+        lam, V, F = E[("A_rtol1e-6", kn, "theta3")]
+        Fb = F[np.ix_([0, 2], [0, 2])]
+        lb = np.linalg.eigvalsh(Fb)
+        for r in drows:
+            if r["source"].endswith(("B_rtol1e-10", "C_shift_half", "D_dt075")) or "projected" in r["source"]:
+                continue
+            v2 = np.array([r["v_lnsigc"], r["v_alpha"]])
+            v3 = np.array([v2[0], 0.0, v2[1]])
+            rq.append(dict(variant=kn, source=r["source"], dlnsigc_dalpha=r["dlnsigc_dalpha"],
+                           rayleigh_theta3_over_lmin=float(v3 @ F @ v3 / lam[0]),
+                           rayleigh_block_over_lmin=float(v2 @ Fb @ v2 / lb[0])))
+    write(rq, "s5c_rayleigh.csv")
 
 # ---------------------------------------------------------------- S5c item 4: FD of the sweeps vs S5a
 crow = []
