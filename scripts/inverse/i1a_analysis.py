@@ -6,7 +6,8 @@ Units: theta = (ln sigc, ln Gc, alpha).
 
 Inputs: <rundir>/<case>_<window>_s<k>.json (i1a_invert.py, 8 starts per case and window) and
 <case>_full_truth.json/.npz (model and binned Jacobian at the truth, both windows).
-- Starts: converged theta_hat, J, evaluations, reason, wall.  Minima: starts are grouped with the
+- Starts: converged theta_hat, J, evaluations, reason, wall; "stalled" = xtol stop with final mu > 1
+  (damping-limited, not a stationary point).  Minima: starts are grouped with the
   lowest-J start if every parameter agrees to 1e-3 (D31); other groups are reported as distinct minima.
 - Bias (D31 I1a.4): measured d_theta = theta_hat(best start) - theta_true; predicted
   d_theta_pred = (S^T S)^-1 S^T (y_ABAQUS - y_ours(theta_true)), S the binned Jacobian at the truth.
@@ -41,6 +42,13 @@ def write(rows, name):
             w.writerow({k: (f"{v:.8g}" if isinstance(v, (float, np.floating)) else v) for k, v in r.items()})
     for r in rows:
         print(name, {k: (f"{v:.4g}" if isinstance(v, (float, np.floating)) else v) for k, v in r.items()})
+
+
+def _stalled(r):
+    """An xtol stop reached only because the damping became huge (the last step is tiny because mu is,
+    not because the gradient vanished): seen in the third smoke run (full window, mu 3.7e9).  Flagged,
+    not counted as converged."""
+    return bool(r["reason"].startswith("xtol") and r["log"][-1]["mu"] > 1.0)
 
 
 def theta_of(t):
@@ -81,6 +89,7 @@ for case in CASES:
             th = np.array(r["theta_hat"])
             row = dict(case=case, window=win, start=r["tag"].split("_s")[-1], done=True, minimum=r["_min"],
                        J=r["J"], converged=r["converged"], reason=r["reason"], evaluations=r["evaluations"],
+                       mu_final=r["log"][-1]["mu"], stalled=_stalled(r),
                        wall_h=r["wall_total"] / 3600.0, cutbacks_total=sum((e.get("cutbacks") or 0) for e in r["log"]))
             for i, n in enumerate(NAMES):
                 row[f"theta0_{n}"] = r["theta0"][i]
@@ -89,7 +98,7 @@ for case in CASES:
                 row[f"diff_best_{n}"] = th[i] - tb[i]
             starts.append(row)
         row = dict(case=case, window=win, n_starts=len(R), n_minima=len(groups),
-                   n_at_best=sum(r["_min"] == 0 for r in R), J_best=best["J"], bins=best["bins"])
+                   n_at_best=sum(r["_min"] == 0 for r in R), n_stalled=sum(_stalled(r) for r in R), J_best=best["J"], bins=best["bins"])
         if Z is not None:
             S = Z[f"{win}_S"]
             d = Z[f"{win}_ydata"] - Z[f"{win}_y"]
