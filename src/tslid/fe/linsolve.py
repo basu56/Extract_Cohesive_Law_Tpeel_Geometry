@@ -25,16 +25,26 @@ import scipy.sparse.linalg as spla
 
 class SuperLU:
     name = "superlu"
+    permc = "COLAMD"
 
     def __call__(self, A, b):
-        return spla.spsolve(A.tocsc(), b)
+        if np.ndim(b) == 1:
+            return spla.spsolve(A.tocsc(), b)
+        self._lu = spla.splu(A.tocsc(), permc_spec=self.permc)
+        return self._lu.solve(np.asarray(b, dtype=float))
+
+    def resolve(self, b):
+        """Solve again with the factorization of the last multi-RHS call (S5 iterative refinement)."""
+        return self._lu.solve(np.asarray(b, dtype=float))
 
 
-class SuperLU_MMD:
+class SuperLU_MMD(SuperLU):
     name = "superlu_mmd"
+    permc = "MMD_AT_PLUS_A"
 
     def __call__(self, A, b):
-        return spla.splu(A.tocsc(), permc_spec="MMD_AT_PLUS_A").solve(b)
+        self._lu = spla.splu(A.tocsc(), permc_spec=self.permc)
+        return self._lu.solve(np.asarray(b, dtype=float))
 
 
 def _find_mkl_rt():
@@ -90,6 +100,14 @@ class Pardiso:
         b = np.asarray(b, dtype=float)
         x = self.ps._call_pardiso(A, np.asfortranarray(b))
         self.n_perturbed += int(self.ps.get_iparm(14) > 0)      # perturbed pivots in this factorization
+        self._A = A
+        return np.asarray(x).ravel() if b.ndim == 1 else np.asarray(x).reshape(b.shape)
+
+    def resolve(self, b):
+        """Solve again with the stored factorization of the last call (phase 33; S5 iterative refinement)."""
+        b = np.asarray(b, dtype=float)
+        self.ps.set_phase(33)
+        x = self.ps._call_pardiso(self._A, np.asfortranarray(b))
         return np.asarray(x).ravel() if b.ndim == 1 else np.asarray(x).reshape(b.shape)
 
 

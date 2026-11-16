@@ -91,11 +91,14 @@ class ElementProblem:
     """Sensitivity protocol of an assembly.ElementSystem (D24 production path).
 
     solver: a linsolve solver object (callable(A, B) with B (n, p)); the PARDISO solvers do one
-    numerical factorization for all p columns."""
+    numerical factorization for all p columns.  refine: at most this many steps of iterative refinement
+    (solver.resolve, same factorization) until the relative residual of the condensed system is <= 1e-15
+    (S5b; 0 = the S5a behaviour)."""
 
-    def __init__(self, system, solver):
+    def __init__(self, system, solver, refine=3):
         S = self.S = system
         self.solver = solver
+        self.refine, self.n_refine, self.last_residual = int(refine), 0, 0.0
         self.free, self.fixed = S.free, S.fixed
         vg, upd, seps = S._raw["value_and_grad"], S._raw["update_history"], S._raw["separations"]
         self.grad = lambda q, h, law: vg(q, h, law)[1]
@@ -115,7 +118,20 @@ class ElementProblem:
         jax.block_until_ready(data)
         A = sps.csr_matrix((np.asarray(data), S.indices, S.indptr), shape=(S.n_sys, S.n_sys))
         t1 = time.perf_counter()
-        X = np.asarray(self.solver(A, np.asarray(rhs).T)).reshape(S.n_sys, -1)
+        Bc = np.asarray(rhs).T
+        X = np.asarray(self.solver(A, Bc)).reshape(S.n_sys, -1)
+        # iterative refinement on the (condensed) system with the same factorization (S5b): the
+        # symmetric-indefinite PARDISO solve with pivot perturbation is accurate to ~1e-10 only at the
+        # near-singular element-failure increments; Newton does not need more, the derivatives do
+        nb = np.abs(Bc).max(axis=0) + 1e-300
+        for it in range(self.refine):
+            R = Bc - A @ X
+            rel = float((np.abs(R).max(axis=0) / nb).max())
+            if rel <= 1e-15 or not hasattr(self.solver, "resolve"):
+                break
+            X = X + np.asarray(self.solver.resolve(R)).reshape(S.n_sys, -1)
+            self.n_refine += 1
+        self.last_residual = float((np.abs(Bc - A @ X).max(axis=0) / nb).max())
         t2 = time.perf_counter()
         if S.condense:
             dq = np.asarray(S._recover_multi(jnp.asarray(X.T), aux))
