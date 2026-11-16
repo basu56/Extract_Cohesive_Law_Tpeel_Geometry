@@ -28,6 +28,7 @@ from tslid.fe.observation import DELTA_BIN, observation_matrix, observe, windows
 
 ROOT = sys.argv[1]
 OUT = sys.argv[2] if len(sys.argv) > 2 else "results/solver/S5_sensitivity"
+os.makedirs(OUT, exist_ok=True)
 B = os.path.join(ROOT, "solver_S5b")
 A = os.path.join(ROOT, "solver_S5a")
 NAMES = ["ln_K0", "ln_sigc", "ln_Gc", "alpha"]
