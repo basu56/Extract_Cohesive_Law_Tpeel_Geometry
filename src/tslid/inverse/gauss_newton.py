@@ -71,9 +71,13 @@ class LMResult:
 
 
 def levenberg_marquardt(evaluate, y_data, s, theta0, bounds, mu0=1e-3, max_iter=30, xtol=1e-6, ftol=1e-8,
-                        callback=None):
+                        callback=None, max_step=None):
     """Minimise J.  evaluate(theta) -> (y, Sbar, info) or (None, None, info) on a failed forward run.
-    callback(entry) is called after every evaluation (for logging as the run goes)."""
+    callback(entry) is called after every evaluation (for logging as the run goes).
+    max_step: per-parameter cap on |dtheta| before projection; the whole step is scaled by one factor,
+    so its direction is kept (a trust-region safeguard added after the second I1a smoke run, where an
+    undamped alpha step crossed the whole box and the clipped trial was re-evaluated unchanged).  A trial
+    identical to an already rejected one is not evaluated again: the damping is raised instead."""
     y_data = np.asarray(y_data, float)
     theta = bounds.project(theta0)
     log = []
@@ -93,6 +97,8 @@ def levenberg_marquardt(evaluate, y_data, s, theta0, bounds, mu0=1e-3, max_iter=
     log.append(entry)
     callback and callback(entry)
     mu, nu, n_eval, small = mu0, 2.0, 1, 0
+    cap = None if max_step is None else np.asarray(max_step, float)
+    rejected = []
     reason, converged = "max_iter", False
     while n_eval < max_iter:
         g = A.T @ r
@@ -109,7 +115,18 @@ def levenberg_marquardt(evaluate, y_data, s, theta0, bounds, mu0=1e-3, max_iter=
                 step[fr] = np.linalg.solve(Hf + mu * Df, -gf)
             except np.linalg.LinAlgError:
                 step[fr] = -gf / (mu * np.diag(Df))
+        if cap is not None:
+            f = float(np.max(np.abs(step) / cap))
+            if f > 1.0:
+                step = step / f
         trial = bounds.project(theta + step)
+        if any(np.array_equal(trial, t) for t in rejected):   # same clipped point: damp more, no new run
+            mu *= nu
+            nu *= 2.0
+            if mu > 1e12:
+                reason = "mu > 1e12"
+                break
+            continue
         dp = trial - theta
         pred = -(dp @ g) - 0.5 * dp @ H @ dp
         rel = float(np.max(np.abs(dp) / np.maximum(1.0, np.abs(theta))))
@@ -130,6 +147,7 @@ def levenberg_marquardt(evaluate, y_data, s, theta0, bounds, mu0=1e-3, max_iter=
         log.append(entry)
         callback and callback(entry)
         if acc:
+            rejected = []
             dJ = J - Jt
             theta, r, A, J = trial, rt, At, Jt
             mu *= max(1.0 / 3.0, 1.0 - (2.0 * rho - 1.0) ** 3)
@@ -139,6 +157,7 @@ def levenberg_marquardt(evaluate, y_data, s, theta0, bounds, mu0=1e-3, max_iter=
                 reason, converged = "ftol (dJ < %.0e J twice)" % ftol, True
                 break
         else:
+            rejected.append(trial.copy())
             mu *= nu
             nu *= 2.0
             if mu > 1e12:

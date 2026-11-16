@@ -46,6 +46,19 @@ def test_lm_recovers_truth_and_projects():
     b2 = Bounds(lo=np.array([-2.0, -2.0, -5.0]), hi=np.array([3.0, 3.0, 1.0]), lnK0=10.0)
     res = levenberg_marquardt(ev, y_data, 1e-3, np.array([0.0, 0.0, -4.0]), b2, max_iter=60)
     assert res.converged and abs(res.theta[2] - 1.0) < 1e-12, (res.theta, res.reason)
+    # step cap: same answers, every evaluated step within the cap, no point evaluated twice
+    cap = np.array([0.5, 0.5, 3.0])
+    for th0 in latin_hypercube(6, b, seed=1):
+        calls.clear()
+        res = levenberg_marquardt(ev, y_data, 1e-3, th0, b, max_iter=60, max_step=cap)
+        assert res.converged and np.abs(res.theta - truth).max() < 1e-6, (th0, res.theta, res.reason)
+        base = [np.asarray(res.log[0]["theta"])]
+        for e in res.log[1:]:
+            assert np.all(np.abs(np.asarray(e["theta"]) - base[-1]) <= cap + 1e-12)
+            if e["accepted"]:
+                base.append(np.asarray(e["theta"]))
+        pts = np.array(calls)
+        assert len(np.unique(pts, axis=0)) == len(pts)
     # E2 projection: ln sigc <= (ln K0 + ln Gc)/2
     bb = default_bounds()
     th = bb.project([np.log(60.0), np.log(0.1), 0.0])

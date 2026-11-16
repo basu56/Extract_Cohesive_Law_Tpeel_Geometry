@@ -45,6 +45,7 @@ ap.add_argument("--noise-seed", type=int, default=None)
 ap.add_argument("--lhs-seed", type=int, default=20261116)
 ap.add_argument("--n-lhs", type=int, default=8)
 ap.add_argument("--max-iter", type=int, default=30)
+ap.add_argument("--max-step", default="0.5,0.5,3.0", help="cap on |dtheta| per parameter (ln, ln, alpha); '' = none")
 ap.add_argument("--tag", default=None)
 a = ap.parse_args()
 os.makedirs(a.out, exist_ok=True)
@@ -109,7 +110,8 @@ def cb(entry):
           np.nan, entry["mu"], entry["accepted"], np.round(entry["theta"], 6), entry["wall"]), flush=True)
 
 
-res = levenberg_marquardt(evaluate, y_data, s, th0, b, max_iter=a.max_iter, callback=cb)
+res = levenberg_marquardt(evaluate, y_data, s, th0, b, max_iter=a.max_iter, callback=cb,
+                         max_step=[float(v) for v in a.max_step.split(",")] if a.max_step else None)
 th = res.theta
 law = F.law(th)
 meta.update(log=log, done=True, theta_hat=th.tolist(), J=res.J, iterations=res.iterations, converged=res.converged,

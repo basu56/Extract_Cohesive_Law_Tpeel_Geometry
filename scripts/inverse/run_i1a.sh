@@ -2,7 +2,7 @@
 # run_i1a.sh -- I1a array: 4 truth cases x 2 windows x 8 Latin-hypercube starts (tasks 0..63) + the 4 truth
 # evaluations (tasks 64..67).  One pinned thread per task, deterministic environment (det_env.sh).
 #   (Negishi repo root) sbatch --account=tomar --partition=cpu --ntasks=1 --cpus-per-task=1 --mem=3G \
-#       --time=24:00:00 --array=0-67 --job-name=i1a --output=<rundir>/slurm-%a-%A.out \
+#       --time=48:00:00 --array=0-67 --job-name=i1a --output=<rundir>/slurm-%a-%A.out \
 #       scripts/inverse/run_i1a.sh <rundir>
 set -u
 REPO=${SLURM_SUBMIT_DIR:-$(cd "$(dirname "$0")/../.." && pwd)}
