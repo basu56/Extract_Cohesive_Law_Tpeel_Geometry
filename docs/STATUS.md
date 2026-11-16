@@ -211,3 +211,20 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
     and the sweeps agree to 0.4°); the peak-preserving direction is 2–5× stiffer than the weakest.
 - **Stopped for user review after S5c.** Open: how to get schedule-stable Fisher eigenvalues
   (finer increments / wider bins / accept); the piecewise adjoint gate; the adjoint cost with refinement.
+
+## Update — Claude Code, 2026-11-15 (D30; S5 closed)
+- **D30** (S5b/S5c review):
+  - Fisher eigenvalue stability, option (c): the weak direction is stable (≤ 0.2°); λ_min carries ~10 %
+    discretization uncertainty (~5 % on the weak-direction CRB), small next to the assumed noise level.
+  - D29 is kept as the objective definition, without the schedule-independence claim.
+  - The h_coh 0.05 sensitivity mesh study is deferred to S4b.
+  - The piecewise adjoint (4.1e-10) is accepted.
+- **Adjoint cost with refinement** [D]: production `sw_s40` 331–379 s per objective (0.67–0.77× a
+  490 s forward run), 1.03 GB of stored states; coarse 0.30–0.35×.
+- **First-failure Fisher diagnostic** [D]:
+  - The first D = 1 is at δ = 0.198 mm, after the peak.
+  - Stability: λ_min 1–4 %, other eigenvalues 7–9 %, weak direction ≤ 0.16°. ≤ 1 % not reached.
+  - Corrected cause of the pre-peak dependence: the σ_c-front (δ_0) element passages, one per
+    0.0034 mm, resolved by 1–2 increments. It is not element failure, as the S5c entry first said.
+- **S5 closed; stopped for user review.** Next phase (parametric inversion baseline with Monte Carlo
+  noise, then the piecewise-law Fisher identifiability map): instructions to come from Claude Web.

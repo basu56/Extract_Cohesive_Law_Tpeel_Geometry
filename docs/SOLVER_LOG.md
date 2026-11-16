@@ -19,7 +19,7 @@ Update this table at each entry.
 | S3 T-peel forward vs ABAQUS | **S3a–S3e done** 2026-11-15 (S3a gate revised to 5e-5, D23); **1 explained E5 failure (as_s21_a7, energy_checks window at the end-of-ligament collapse)**; stopped for review | linear T-peel = ABAQUS to 3e-8; 5 reference cases: max \|ΔP\| ≤ 3.6e-4 P_peak, ΔP_peak ≤ 2.5e-5, ℓ_cz ≤ 0.01 el.; E4–E6 = ABAQUS over the compare_ld window | sw_s40, one job/node: 532 s (1 thread) and 383 s (4) vs ABAQUS 2292 s (0.23× / 0.17×) | ABAQUS-equivalent T-peel forward solve at < 1/4 of its cost, element-local and differentiable |
 | S4a sweeps vs ABAQUS (D25) | **done** 2026-11-15; stopped for review | 23/23 runs (21 laws) pass load gates, max \|ΔP\| ≤ 5.5e-4 P_peak; D18 pair differences agree to ≤ 1.05e-4 P_peak (≤ 0.4 % of signal); E6 of as_s21_a7 fails identically in both solvers (D26 window) | 318–986 s per run, 4 threads | Phase-1 G_c 0.4 dataset reproduced by the differentiable solver |
 | S4b throughput (batched / GPU, increments) | deferred until after S5 (D25) | | | |
-| S5 gradients | **S5.0–S5c done** 2026-11-15; stopped for review. S5.0 gate revised (D29: ≤ 1e-10 in the window, measured 6.5e-12); **S5c: Fisher eigenvalues schedule-dependent 4–15 % (target ~1 %), weak direction stable ≤ 0.2°** | partials ≤ 1e-7; direct vs AD ≤ 1e-10, vs FD (T-peel) to the FD limit; adjoint = direct ≤ 4.9e-11 (α law; piecewise p = 31: 4.1e-10), adjoint vs FD of J ≤ 6e-7 pre-peak | sw_s40: forward 541 s; + 4 direct sensitivities 1051 s; adjoint 320 s per J, 1.03 GB | exact gradients and Jacobians of the observed curve; first Fisher/CRB result; Fisher weak slope d ln σ_c/dα ≈ 0.07 vs peak-preserving 0.11 |
+| S5 gradients (direct, adjoint, Fisher) | **done and closed** 2026-11-15 (D27–D30); stopped for review | partials ≤ 1e-7; direct vs AD ≤ 1e-10, vs FD to the FD limit (best 1.3e-6 … 1.0e-5); adjoint = direct 4.9e-11 (α law), 4.1e-10 (piecewise p = 31; accepted D30); adjoint vs FD of J ≤ 6e-7 pre-peak; Fisher weak direction stable ≤ 0.2°, λ_min ±~10 % (discretization; D30) | sw_s40 1 thread: forward 490–541 s; + 4 direct sensitivities 1051 s; adjoint 331–379 s per J, 1.03 GB | exact derivatives of the observed P–δ curve for any objective (adjoint flat in p); first identifiability result: CRB, weak direction d ln σ_c/dα ≈ 0.07 vs peak-preserving 0.11 |
 
 Reference ABAQUS costs:
 - [D] ~20–25 min per T-peel run on 1 CPU (26k CPE4I, full output; `docs/STATUS.md`).
@@ -1185,3 +1185,49 @@ CRB 10× smaller):
 3. Piecewise-law adjoint vs direct: 4.1e-10 on the full window (gate 1e-10).
 4. Adjoint cost with the refinement solves (a rerun of the cost job); adjoint vs FD on the full window
    is FD-limited (≤ 7.3e-6).
+
+**Note 2026-11-15 (D30), S5b.**
+- **Cost rerun with the refinement solves** (job 45956871, same protocol; replaces the cost table above,
+  which is kept for the record):
+
+| | forward | adjoint per J (full / pre-peak) | of which solve | storage | peak RSS |
+|---|---|---|---|---|---|
+| coarse `c_s40` | 86 s | 26.0 / 30.2 s (0.30× / 0.35×) | 22–25 s | 100 MB | 0.62 GB |
+| production `sw_s40` | 490 s | **379 / 331 s (0.77× / 0.67×)** | 306–356 s | 1.03 GB | 2.4 GB |
+
+  - Refinement adds up to ~18 % to the adjoint; adjoint JIT is 9.8 s / 24 s.
+  - The p-scaling result is unchanged: the adjoint is flat in p, the direct method linear.
+- **Piecewise-law adjoint vs direct (4.1e-10 on the full window): accepted (D30).** Two independent
+  paths agree to 4e-10 on the full window and 3e-13 before the peak; the residual is PARDISO accuracy at
+  the failure increments.
+
+**Note 2026-11-15 (D30), S5c.**
+- **Decision (option c).** The weak direction is stable (≤ 0.2°). The smallest eigenvalue carries
+  ~10 % discretization uncertainty, i.e. ~5 % on the weak-direction Cramér–Rao bound. The assumed noise
+  level s is a far larger uncertainty. D29 is kept as the objective definition, without the claim that it
+  removes schedule dependence at production resolution. A mesh study of the sensitivities (h_coh 0.05)
+  is deferred to S4b.
+- **Diagnostic: window ending at the first full cohesive-point failure (D = 1)**
+  (`scripts/fe/s5c_first_failure.py`, `s5c_first_failure.csv`) [D].
+  - The first D = 1 is at δ = 0.1983 (A), 0.1993 (C) and 0.1988 mm (D): just **after** the ABAQUS peak
+    (0.1944 mm). The window (66 bins, to 0.198 mm, A's value for all runs) is therefore slightly
+    longer than the pre-peak window.
+  - θ3: eigenvalues 137.5, 2.19e5, 1.21e6 (s = 1e-3 P_peak); cond 8.8e3; CRB ln σ_c 0.0052,
+    ln G_c 0.0016, α 0.085.
+  - Stability, C/D vs A:
+    - λ_min −2.3 % / +1.0 % (θ3) and −4.2 % / −0.3 % (θ4);
+    - λ_max −8.9 % / −7.1 %;
+    - weak direction 0.10° / 0.10° (θ3), 0.16° / 0.14° (θ4);
+    - bin-averaged S 5.2–6.5 %.
+  - **The expected ≤ 1 % [H] is not confirmed.** λ_min is steadier than in (i)/(ii), but the other
+    eigenvalues are not.
+- **Correction to the S5c entry (cause of the pre-peak schedule dependence).** The entry says the
+  pre-peak S differences at δ = 0.17–0.19 mm sit "where the first tip elements fail before the peak".
+  That is **wrong**: no point reaches D = 1 before δ = 0.198 mm.
+  - The σ_c (initiation, δ_0) front does move pre-peak, in ABAQUS and tslid.fe identically: from
+    x = 18.18 mm at δ = 0.10 to 20.39 mm at δ = 0.19, at 29 mm/mm over 0.15–0.19, i.e. one 0.1 mm element
+    per Δδ ≈ 0.0034 mm.
+  - [I] Each δ_0 crossing is a kink of D(δ_max). The crossings are again resolved by only 1–2 increments
+    (0.002 mm), which gives the same aliasing as the failure passages after the peak. That is why ending
+    the window at the first failure does not remove it.
+  - The rest of the S5c entry is unaffected.

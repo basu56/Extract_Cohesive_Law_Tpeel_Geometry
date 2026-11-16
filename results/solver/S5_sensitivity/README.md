@@ -63,13 +63,16 @@ Runs: `solver_S5b/`, `solver_S5c/`. Log: SOLVER_LOG S5b, S5c.
 | `s5b_adjoint_vs_direct.csv` | per run (t10: α law rtol 1e-10; pw30: piecewise p = 31; cost) and window: J, relative difference adjoint vs direct for each direct p |
 | `s5b_adjoint_vs_fd.csv` | adjoint dJ/dθ vs central FD of J from the S5a replay runs, per window, parameter and h (valid_replay: both ± runs keep b1's increments through the last bin) |
 | `s5b_scaling.csv` | piecewise law: direct wall time for p = 4, 8, 16, 31 and adjoint per J, one forward run |
-| `s5b_cost.csv` | coarse and production: forward, adjoint (rhs / solve / back), storage, peak RSS (measured before the refinement solves were added) |
+| `s5b_cost.csv` | coarse and production: forward, adjoint (rhs / solve / back), storage, peak RSS (rerun with the refinement solves, D30, job 45956871) |
 | `s5c_fisher.csv` | Fisher matrices (i) pre-peak, (ii) full filtered, (iii) full raw; θ3, θ4; s = 1e-3, 1e-4 P_peak: eigenvalues, condition, CRB, weak eigenvector; schedules A–D |
 | `s5c_stability.csv` | B, C, D vs A: relative eigenvalue changes, eigenvector angles, δ where the schedules split |
 | `s5c_width_study.csv` | eigenvalue and weak-direction stability vs bin width (1–16 passages) |
 | `s5c_directions.csv` | trade-off slopes d ln σ_c/dα: sweeps iso-peak (both solvers), D18 pairs (raw and corrected), S5a ∂P_peak/∂θ, Fisher weak directions; angles to the sweep direction |
+| `s5c_first_failure.csv` | D30 diagnostic: Fisher on the bins up to the first D = 1 (δ 0.198 mm), schedules A, C, D, stability |
 | `s5c_rayleigh.csv` | vᵀFv/λ_min of each candidate direction |
 | `s5c_fdcheck.csv` | sweep FD slopes vs S5a, bin-averaged (S5c item 4) |
 | `s5c.png/.pdf` | (a) raw and bin-averaged sensitivities with P; (b) Fisher spectra, four schedules; (c) trade-off directions |
 
 The noise levels s are assumed, not measured.
+
+D30: the Fisher eigenvalues carry ~10 % discretization uncertainty (λ_min); the weak direction is stable to ≤ 0.2°.
