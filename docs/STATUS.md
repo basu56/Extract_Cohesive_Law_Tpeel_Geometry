@@ -228,3 +228,7 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
     0.0034 mm, resolved by 1–2 increments. It is not element failure, as the S5c entry first said.
 - **S5 closed; stopped for user review.** Next phase (parametric inversion baseline with Monte Carlo
   noise, then the piecewise-law Fisher identifiability map): instructions to come from Claude Web.
+
+## Update — Claude Web, 2026-11-15 (inverse phase plan)
+- Next phase instructions: `docs/inverse/I1_I2_INSTRUCTIONS.md`, with log `docs/INVERSE_LOG.md`.
+- Start after the D30 close-out review. Order: I1a → stop → I1b–I1d → stop → I2.0–I2d → stop.

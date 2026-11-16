@@ -462,3 +462,30 @@ Decision (user):
    phase (parametric inversion baseline with Monte Carlo noise, then the piecewise-law Fisher
    identifiability map) will come from Claude Web.
 Status: **agreed**.
+
+## 2026-11-15 — D31: Inverse phase I1–I2 design
+Decision (user, on Claude Web's plan): after S5, two parts before any neural law.
+
+**I1, parametric inversion baseline.**
+- Levenberg–Marquardt with the S5a binned Jacobian. Data are ABAQUS records; the model is our
+  solver.
+- I1a: noise-free multi-start recovery, with the bias from solver mismatch predicted by
+  linearization and measured.
+- I1b: Monte Carlo (50 realizations each at s = 1e-3 and 1e-4 P_peak, assumed) against the
+  Cramér–Rao bound, including coverage.
+- I1c: an ABAQUS truth at h_coh 0.05 for the bias from mesh mismatch (one new ABAQUS run).
+- I1d: bilinear fit to α = 7 and α = −3 data, measuring model-form error.
+
+**I2, piecewise-law identifiability map.**
+- I2.0: support scale ℓ made differentiable; Fisher analysis in an L²-normalized metric.
+- I2a: spectrum, identifiable modes (threshold 0.05 σ_c RMS, sensitivity to the threshold
+  shown), linear functionals and m-convergence at `sw_s40`.
+- I2b: twin laws checked with the full nonlinear model.
+- I2c: mode count against ℓ_cz/H (`sw_s58`, `sw_s40`, `sw_s21`), testing H2.
+- I2d: mouth opening as an extra observable (preview).
+
+Observation operator D29 throughout (bins of 0.003 mm; pre-peak and full windows). Logging in
+`docs/INVERSE_LOG.md`. Code in `src/tslid/inverse/`.
+Stops: after I1a, after I1b–I1d, after I2.
+Instructions: `docs/inverse/I1_I2_INSTRUCTIONS.md`.
+Status: **agreed**.
