@@ -13,7 +13,11 @@ the step is invariant to the scaling of each parameter), followed by projection 
   * D10 admissibility (E2: phi_e = sigc^2 / (2 K0 Gc) <= 1/2, i.e. ln sigc <= (ln K0 + ln Gc)/2; E3
     then holds), by moving ln sigc down onto the constraint (and ln Gc up if that would leave the box).
 
-Projection, not a smooth log/logit map: the bounds are rarely active near the solution, and a
+Bounds are handled by an active set plus projection: a parameter on a box bound whose descent direction
+points outward is held fixed and the damped system is solved for the free ones (otherwise the clipped
+step can have a non-positive predicted reduction and good steps get rejected, seen in the I1a smoke run);
+a clipped step whose prediction is still <= 0 is accepted if it lowers J.  Projection, not a smooth
+log/logit map: the bounds are rarely active near the solution, and a
 projected step keeps theta in physical coordinates, so the Jacobian is the S5a one without a chain
 factor.  The gain ratio uses the projected step: rho = (J - J_trial) / pred, pred = -(dtheta_p . g)
 - 1/2 dtheta_p^T A^T A dtheta_p.  Damping update (Nielsen 1999): accepted (rho > 1e-4) -> mu *= max(1/3,
@@ -94,10 +98,17 @@ def levenberg_marquardt(evaluate, y_data, s, theta0, bounds, mu0=1e-3, max_iter=
         g = A.T @ r
         H = A.T @ A
         D = np.diag(np.maximum(np.diag(H), 1e-300 * max(np.diag(H).max(), 1.0)))
-        try:
-            step = np.linalg.solve(H + mu * D, -g)
-        except np.linalg.LinAlgError:
-            step = -g / (mu * np.diag(D))
+        # active set: a parameter on a box bound whose descent direction points outward stays fixed
+        eps = 1e-12
+        act = ((theta <= bounds.lo + eps) & (g > 0)) | ((theta >= bounds.hi - eps) & (g < 0))
+        fr = ~act
+        step = np.zeros_like(theta)
+        if fr.any():
+            Hf, gf, Df = H[np.ix_(fr, fr)], g[fr], D[np.ix_(fr, fr)]
+            try:
+                step[fr] = np.linalg.solve(Hf + mu * Df, -gf)
+            except np.linalg.LinAlgError:
+                step[fr] = -gf / (mu * np.diag(Df))
         trial = bounds.project(theta + step)
         dp = trial - theta
         pred = -(dp @ g) - 0.5 * dp @ H @ dp
@@ -107,9 +118,14 @@ def levenberg_marquardt(evaluate, y_data, s, theta0, bounds, mu0=1e-3, max_iter=
             break
         rt, At, Jt, info, w = ev(trial)
         n_eval += 1
-        rho = (J - Jt) / pred if (rt is not None and pred > 0) else -np.inf
+        if rt is None:
+            rho = -np.inf
+        elif pred > 0:
+            rho = (J - Jt) / pred
+        else:                     # clipped step with a non-positive model prediction: accept any decrease
+            rho = 0.5 if Jt < J else -np.inf
         acc = rho > 1e-4
-        entry = dict(k=n_eval, theta=trial.tolist(), J=Jt if rt is not None else None, mu=mu, rho=float(rho),
+        entry = dict(k=n_eval - 1, theta=trial.tolist(), active=act.tolist(), J=Jt if rt is not None else None, mu=mu, rho=float(rho),
                      pred=float(pred), accepted=bool(acc), rel_step=rel, wall=w, **_info(info))
         log.append(entry)
         callback and callback(entry)

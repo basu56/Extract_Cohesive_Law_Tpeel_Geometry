@@ -42,6 +42,10 @@ def test_lm_recovers_truth_and_projects():
         res = levenberg_marquardt(ev, y_data, 1e-3, th0, b, max_iter=60)
         assert res.converged, res.reason
         assert np.abs(res.theta - truth).max() < 1e-6, (th0, res.theta)
+    # optimum on a bound: the truth's alpha lies beyond the box -> converge onto the bound
+    b2 = Bounds(lo=np.array([-2.0, -2.0, -5.0]), hi=np.array([3.0, 3.0, 1.0]), lnK0=10.0)
+    res = levenberg_marquardt(ev, y_data, 1e-3, np.array([0.0, 0.0, -4.0]), b2, max_iter=60)
+    assert res.converged and abs(res.theta[2] - 1.0) < 1e-12, (res.theta, res.reason)
     # E2 projection: ln sigc <= (ln K0 + ln Gc)/2
     bb = default_bounds()
     th = bb.project([np.log(60.0), np.log(0.1), 0.0])
