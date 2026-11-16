@@ -6,7 +6,10 @@ Units: mm, N.  theta = (ln K0, ln sigc, ln Gc, alpha); theta3 = (ln sigc, ln Gc,
 
 Sensitivities (S5a, production sw_s40): two schedules,
   A = solver_S5a_cost/sw_s40_sens_sens.npz  (rtol 1e-6, D24 production)
-  B = solver_S5c/sw_s40_t10_sens.npz        (rtol 1e-10, its own schedule)
+  B = solver_S5c/sw_s40_t10_sens.npz        (rtol 1e-10, its own schedule; identical to A inside the
+                                             window: the production run is at dtmax there)
+  C = solver_S5c/sw_s40_shift_sens.npz      (replay: A's schedule shifted by half an increment)
+  D = solver_S5c/sw_s40_dt075_sens.npz      (replay: 0.75 x the increment)
 Fisher (D29), s = assumed load-noise level (not a measurement):
   (i)   prepeak : y = O_pre P  (bin averages, observation.py, bins up to delta_peak of ABAQUS sw_s40),
                   F = (O S)^T (O S) / s^2  (each bin one observation with noise s)
@@ -44,7 +47,9 @@ A1 = os.path.join(ROOT, "phase1a_sigc_sweep")
 B1 = os.path.join(ROOT, "phase1b_alpha_sweep")
 S4 = os.path.join(ROOT, "solver_S4a")
 RUNS = {"A_rtol1e-6": os.path.join(ROOT, "solver_S5a_cost", "sw_s40_sens_sens.npz"),
-        "B_rtol1e-10": os.path.join(ROOT, "solver_S5c", "sw_s40_t10_sens.npz")}
+        "B_rtol1e-10": os.path.join(ROOT, "solver_S5c", "sw_s40_t10_sens.npz"),
+        "C_shift_half": os.path.join(ROOT, "solver_S5c", "sw_s40_shift_sens.npz"),
+        "D_dt075": os.path.join(ROOT, "solver_S5c", "sw_s40_dt075_sens.npz")}
 SETS = {"theta3": [1, 2, 3], "theta4": [0, 1, 2, 3]}
 
 ref = load(A1, "sw_s40")
@@ -121,19 +126,24 @@ def angle(u, v):
     return float(np.degrees(np.arccos(min(1.0, abs(float(u @ v))))))
 
 
-if len(Z) == 2:
-    a, b = list(Z)
+a = "A_rtol1e-6"
+for b in [k for k in Z if k != a and a in Z]:
+    tA, tB = Z[a]["time"], Z[b]["time"]
+    n = min(len(tA), len(tB))
+    k = np.nonzero(tA[:n] != tB[:n])[0]
+    d_split = float(Z[a]["delta"][k[0]]) if len(k) else None
     for kn in KINDS:
         for sn in SETS:
             la, Va, _ = E[(a, kn, sn)]
             lb, Vb, _ = E[(b, kn, sn)]
-            r = dict(variant=kn, params=sn)
+            r = dict(run=b, vs=a, delta_schedules_split=d_split, variant=kn, params=sn)
             for i in range(len(la)):
                 r[f"dlambda{i}_rel"] = float((lb[i] - la[i]) / la[i])
                 r[f"angle_v{i}_deg"] = angle(Va[:, i], Vb[:, i])
             r["max_dlambda_rel"] = float(np.max(np.abs((lb - la) / la)))
             r["weak_angle_deg"] = r["angle_v0_deg"]
             srows.append(r)
+if srows:
     write(srows, "s5c_stability.csv")
 
 # ---------------------------------------------------------------- trade-off directions, (ln sigc, alpha) plane
@@ -250,16 +260,16 @@ if Z:
               title=f"(a) sw_s40 sensitivities, {run}: raw (thin), bin average (thick)\n"
                     "grey band: D18 pre-peak window; dotted: ABAQUS peak")
     ax[0].legend(frameon=False, fontsize=7, loc="upper right")
-for (run, z), mk in zip(Z.items(), ("o", "s")):
+for (run, z), mk in zip(Z.items(), ("o", "s", "^", "v")):
     for (kn, _), c in zip(KINDS.items(), C):
         lam = E[(run, kn, "theta4")][0] / (1e-3 * P_PEAK) ** 2
-        ax[1].semilogy(np.arange(len(lam)) + (0.1 if mk == "s" else -0.1), lam, mk, color=c, mfc="w" if mk == "s" else c,
+        ax[1].semilogy(np.arange(len(lam)) + 0.08 * "os^v".index(mk) - 0.12, lam, mk, color=c, mfc="w" if mk != "o" else c,
                        label=f"{kn}, {run}")
 ax[1].set(xlabel="eigenvalue index (theta4)", ylabel=r"eigenvalue of F, s = 1e-3 $P_{peak}$",
           title="(b) Fisher spectra, two schedules")
 ax[1].legend(frameon=False, fontsize=6)
 for r, c in zip([r for r in drows if ("pair" not in r["source"] or "corrected" in r["source"])
-                 and "projected" not in r["source"] and "B_" not in r["source"]], C * 3):
+                 and "projected" not in r["source"] and r["source"].endswith(("A_rtol1e-6", "abaqus", "tslid.fe", "(corrected)"))], C * 4):
     v = np.array([r["v_lnsigc"], r["v_alpha"]])
     ax[2].plot([-v[1] * 0, v[1]], [0, v[0]], color=c, lw=1.2, label=r["source"][:48])
 ax[2].set(xlabel=r"$\alpha$ component", ylabel=r"$\ln\sigma_c$ component",
