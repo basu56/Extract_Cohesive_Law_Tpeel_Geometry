@@ -440,3 +440,25 @@ Decision (user):
    matched-pair direction, as instructed.
 8. Stop for review after S5c.
 Status: **agreed**.
+
+## 2026-11-15 — D30: S5b/S5c review — Fisher discretization uncertainty, D29 update, S5 close-out
+Decision (user):
+1. **S5b/S5c accepted.**
+2. **Fisher eigenvalue stability: option (c).**
+   - The weak direction is stable (≤ 0.2°).
+   - The smallest eigenvalue is reported with ~10 % discretization uncertainty (~5 % on the
+     weak-direction Cramér–Rao bound), noting that the assumed noise level s is a far larger
+     uncertainty.
+   - One diagnostic is added: a Fisher variant whose window ends at the first full cohesive-point
+     failure (D = 1), checked for stability under the two replayed schedules. Expected ≤ 1 % [H].
+3. **D29 updated.** The bin-average operator stays part of the objective definition. It is not claimed
+   to remove schedule dependence at production resolution (element passage ≈ 1–2 increments). A mesh
+   study of the sensitivities (h_coh 0.05) is deferred to S4b.
+4. **Piecewise-law adjoint vs direct (4.1e-10 on the full window): accepted.** Two independent paths
+   agree to 4e-10 on the full window and 3e-13 before the peak; the residual is PARDISO accuracy at the
+   failure increments.
+5. **Cost:** rerun the S5b cost job with the refinement solves included and update the numbers.
+6. Close S5 (SOLVER_LOG summary row, STATUS, session log) and stop for review. Instructions for the next
+   phase (parametric inversion baseline with Monte Carlo noise, then the piecewise-law Fisher
+   identifiability map) will come from Claude Web.
+Status: **agreed**.
