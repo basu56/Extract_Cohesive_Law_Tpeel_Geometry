@@ -192,3 +192,22 @@ Git: the Negishi clone now tracks `main` (its old `master` branch is stale; leav
 - **Stopped for user review after S5a.**
 - **Next (user):** accept or not the roundoff-level S5.0 change; accept the ln σ_c FD result or
   rerun FD with tighter Newton; S5c treatment of the spikes; then S5b → S5c.
+
+## Update — Claude Code, 2026-11-15 (S5.0/S5a review → D29; S5b, S5c)
+- **D29:** forward gate revised (≤ 1e-10 within the window); ln σ_c FD gate accepted; observation
+  operator = P averaged over one bond-element passage (0.003 mm, from the crack-tip record) in every
+  objective; factorization reuse deferred to S4b; S5b/S5c scope.
+- **S5b done** [D]:
+  - discrete adjoint (`adjoint.py`), observation operator (`observation.py`), piecewise-linear
+    many-parameter law, iterative refinement of the derivative solves;
+  - adjoint = direct to 4.9e-11 (α law; piecewise p = 31: **4.1e-10**, gate 1e-10);
+  - adjoint vs FD of J ≤ 6e-7 pre-peak (FD-limited on the full window, ≤ 7.3e-6);
+  - adjoint cost flat in p (0.3–0.7× forward); 1.03 GB of stored states for production `sw_s40`.
+- **S5c done** [D]:
+  - Fisher of `sw_s40` three ways, CRB at assumed noise levels; α is the least determined parameter;
+  - the weak direction is stable to ≤ 0.2° across schedules, but **the eigenvalues change by 4–15 %
+    (target ~1 %)**, filtered or not: one element passage is resolved by only 1–2 increments;
+  - the Fisher weak slope d ln σ_c/dα ≈ 0.07, against 0.10–0.11 for the peak-preserving direction (S5a
+    and the sweeps agree to 0.4°); the peak-preserving direction is 2–5× stiffer than the weakest.
+- **Stopped for user review after S5c.** Open: how to get schedule-stable Fisher eigenvalues
+  (finer increments / wider bins / accept); the piecewise adjoint gate; the adjoint cost with refinement.

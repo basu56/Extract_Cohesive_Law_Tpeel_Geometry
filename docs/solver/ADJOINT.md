@@ -170,3 +170,34 @@ The storage per increment is measured in S5b.
 | two-block bar (S2, monolithic), μ ∈ {0, 0.05}: recursion vs Richardson central FD, same load steps, Newton to roundoff | ≤ 1e-9 | same |
 | coarse T-peel: condensed = uncondensed; res_free; first 20 increments vs FD with replay | ≤ 1e-9; ≤ 1e-8; ≤ 1e-5 | same |
 | coarse T-peel, whole curve, step study 1e-3 … 1e-7, deterministic | ≤ 1e-5: ln K0 1.3e-6, ln σ_c 1.02e-5 (marginal), ln G_c 6.1e-7, α 4.0e-6 at the best steps; FD-limited (failure-event increments for h ≥ 1e-5, 1/h noise below 1e-6) | S5a (SOLVER_LOG) |
+
+## 6. Additions in S5b/S5c (D29)
+
+**Observation operator** (`src/tslid/fe/observation.py`).
+- Every objective uses y = O P: the averages of the piecewise-linear record over fixed δ bins of width
+  0.003 mm (one 0.1 mm bond-element passage of `sw_s40`).
+- O depends only on the prescribed δ_n, so dy/dθ = O dP/dθ, and in the adjoint g = Oᵀ ∂J/∂y.
+- Data on another δ grid are observed with their own O on the same bins.
+
+**Linear-solve accuracy.** The sensitivity and adjoint solves are refined iteratively on the condensed
+system, with the same factorization (`ElementProblem(refine=3)`).
+- Without refinement, PARDISO-sym (pivot perturbation 1e-8) gave adjoint − direct differences of 5.7e-10
+  (α law) and 1.3e-9 (piecewise law) on the full-window J.
+- With refinement: 4.9e-11 and 4.1e-10. Pre-peak: ≤ 4e-13 either way.
+
+**Many-parameter law.** `PiecewiseLawParams`: a piecewise-linear traction envelope with the knot
+tractions as parameters; closed-form F and D, differentiable in every leaf. It was chosen over
+`TabularLawParams`, whose envelope integral is not differentiable in the table values.
+
+**Verification (S5b)**
+
+| check | tolerance | measured |
+|---|---|---|
+| adjoint vs direct, coarse T-peel, same states, α law, rtol 1e-10 | ≤ 1e-10 | 4.2e-13 (pre-peak J), 4.9e-11 (full J) |
+| adjoint vs direct, piecewise law p = 31, rtol 1e-6 | ≤ 1e-10 | 3.3e-13 (pre-peak), **4.1e-10 (full)** |
+| adjoint vs FD of J (replay, deterministic), best step | ≤ 1e-6 | pre-peak 6e-8 – 5.5e-7 (all 4); full window 2.2e-7 – 7.3e-6 (FD-limited) |
+| unit tests: single element, two-block (α law and 25-parameter piecewise law, viscous), coarse T-peel | ≤ 1e-10 | pass |
+
+**Cost (S5b).** Adjoint 0.3× (coarse) and 0.7× (production) of the forward run, flat in p (25–27 s for
+p = 31 on the coarse mesh, against 169 s for the direct method). Storage 1.23 MB per increment, 1.03 GB
+for production `sw_s40`, in memory.

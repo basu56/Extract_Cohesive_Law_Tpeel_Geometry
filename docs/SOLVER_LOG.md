@@ -19,7 +19,7 @@ Update this table at each entry.
 | S3 T-peel forward vs ABAQUS | **S3a–S3e done** 2026-11-15 (S3a gate revised to 5e-5, D23); **1 explained E5 failure (as_s21_a7, energy_checks window at the end-of-ligament collapse)**; stopped for review | linear T-peel = ABAQUS to 3e-8; 5 reference cases: max \|ΔP\| ≤ 3.6e-4 P_peak, ΔP_peak ≤ 2.5e-5, ℓ_cz ≤ 0.01 el.; E4–E6 = ABAQUS over the compare_ld window | sw_s40, one job/node: 532 s (1 thread) and 383 s (4) vs ABAQUS 2292 s (0.23× / 0.17×) | ABAQUS-equivalent T-peel forward solve at < 1/4 of its cost, element-local and differentiable |
 | S4a sweeps vs ABAQUS (D25) | **done** 2026-11-15; stopped for review | 23/23 runs (21 laws) pass load gates, max \|ΔP\| ≤ 5.5e-4 P_peak; D18 pair differences agree to ≤ 1.05e-4 P_peak (≤ 0.4 % of signal); E6 of as_s21_a7 fails identically in both solvers (D26 window) | 318–986 s per run, 4 threads | Phase-1 G_c 0.4 dataset reproduced by the differentiable solver |
 | S4b throughput (batched / GPU, increments) | deferred until after S5 (D25) | | | |
-| S5 gradients | **S5.0 + S5a done** 2026-11-15; stopped for review; **gate 2 (≤ 1e-14) not met: old vs new 4–7e-12 (roundoff); ln σ_c FD 1.02e-5 vs gate 1e-5** | partials ≤ 1e-7; single element vs AD ≤ 1e-10; two-block vs FD ≤ 1e-9; T-peel vs FD best 1.3e-6 / 1.0e-5 / 6.1e-7 / 4.0e-6; repeat runs bit-identical | sw_s40 forward + 4 sensitivities 1051 s vs forward 541 s (1 thread) | exact dP/dθ of the whole discrete curve at ~2× forward cost (17× faster than ABAQUS FD) |
+| S5 gradients | **S5.0–S5c done** 2026-11-15; stopped for review. S5.0 gate revised (D29: ≤ 1e-10 in the window, measured 6.5e-12); **S5c: Fisher eigenvalues schedule-dependent 4–15 % (target ~1 %), weak direction stable ≤ 0.2°** | partials ≤ 1e-7; direct vs AD ≤ 1e-10, vs FD (T-peel) to the FD limit; adjoint = direct ≤ 4.9e-11 (α law; piecewise p = 31: 4.1e-10), adjoint vs FD of J ≤ 6e-7 pre-peak | sw_s40: forward 541 s; + 4 direct sensitivities 1051 s; adjoint 320 s per J, 1.03 GB | exact gradients and Jacobians of the observed curve; first Fisher/CRB result; Fisher weak slope d ln σ_c/dα ≈ 0.07 vs peak-preserving 0.11 |
 
 Reference ABAQUS costs:
 - [D] ~20–25 min per T-peel run on 1 CPU (26k CPE4I, full output; `docs/STATUS.md`).
@@ -964,3 +964,224 @@ Jobs 45934469–45934476, one pinned thread each, deterministic environment. Res
    separately; check F's stability under a different schedule (rtol 1e-6 own schedule vs
    replay); smooth over one element length. To decide before S5c.
 4. Optional: cut the production overhead (factorization reuse, above).
+
+**Note 2026-11-15 (D29, S5a step study): kink-straddled increments.** No increment was excluded from the
+S5a gate numbers. The kink counters (1e-8 at the base state) flagged none, so `curve_rel_no_kink` =
+`curve_rel` in `s5a_stepstudy.csv`. The "events excluded" figures in the S5a entry (212 post-peak
+failure increments) are a diagnostic of where the FD error sits; they are not used for the gate.
+D29 accepts ln σ_c (1.02e-5) as a finite-difference limit.
+
+## S5b — Discrete adjoint; observation operator (D29); many-parameter law — 2026-11-15 — commits to (S5c commit)
+
+Runs: `/scratch/negishi/basu56/tslid_runs/solver_S5b/`.
+- Jobs 45947320–45947322: t10, pw30 (first runs, without refinement, kept in `v1_norefine/`) and cost.
+- Jobs 45950446–45950447: t10, pw30 with refinement.
+
+All runs: one pinned thread, deterministic environment. Results `results/solver/S5_sensitivity/`
+(`s5b_*.csv`). Derivation ADJOINT.md §3.
+
+**Built.**
+- **`src/tslid/fe/observation.py` (D29).** The observed load is the average of the piecewise-linear
+  record over fixed δ bins: y = O P, with O the exact hat-function integrals. It is linear and
+  θ-independent, so the same O is applied to data, model and sensitivities.
+  - Bin width: one 0.1 mm bond-element passage from the crack-tip record of `sw_s40`
+    (`energy_checks.zone_fronts`, traction-free tip; ABAQUS and tslid.fe agree to 3 digits).
+  - dx_tip/dδ falls from 58 just after the peak to 27 mm/mm at the end of the window. The fit over
+    0.3 mm ≤ δ ≤ d_end gives 33.5 mm/mm, hence **Δδ_bin = 0.003 mm**; the local passage is
+    0.0017–0.0038 mm.
+  - Windows: "prepeak" = bins up to the ABAQUS peak (δ = 0.192 mm, 64 bins); "full" = bins up to
+    d_end (424–425 bins).
+- **`src/tslid/fe/adjoint.py`.** `StateRecorder` (on_converged hook) and `Adjoint.gradient`
+  (backward sweep (A1)–(A3)): two reverse passes plus one condensed Newton solve per increment, at the
+  stored state.
+- **`PiecewiseLawParams` (interface.py)** for the many-parameter test: a piecewise-linear traction
+  envelope with the interior knot tractions (plus K0 and σ_c) as leaves.
+  - It is preferred over `TabularLawParams`, whose envelope integral is assembled in NumPy and is not
+    differentiable in the table values.
+  - Closed-form F and D; G_c = 0.40016 for 30 segments of the σ_c 40 law.
+- **Iterative refinement of the sensitivity and adjoint solves** (`ElementProblem(refine=3)`).
+  - It reuses the same factorization: PARDISO phase 33 or a cached SuperLU factor. Newton is
+    unchanged.
+  - PARDISO-sym with pivot perturbation is accurate to only ~1e-10 at near-singular element-failure
+    increments; refinement is needed to meet the adjoint-vs-direct gate.
+- **Scripts and tests.** `s5b_run.py`, `run_s5b.sh`, `s5b_analysis.py`;
+  `tests/fe/test_s5b_adjoint.py` (operator exact to 1e-13; piecewise-law partials; adjoint = direct
+  ≤ 1e-10 for the single element, the two-block bar with the α law and with a 25-parameter piecewise
+  law, viscous, and the coarse T-peel).
+
+**Verification [D].**
+- **Adjoint vs direct, same converged states, same run** (`s5b_adjoint_vs_direct.csv`). Coarse `c_s40`;
+  J = ½ w Σ (y − y_ABAQUS)².
+
+| run | J pre-peak | J full window (filtered) |
+|---|---|---|
+| α law, rtol 1e-10, PARDISO + refinement (states bit-identical to S5a b1) | 4.2e-13 | **4.9e-11** |
+| same, without refinement | 2.4e-13 | 5.7e-10 |
+| α law, rtol 1e-6, SuperLU (smoke run, Bell) | 2.0e-14 | 4.7e-13 |
+| piecewise law, p = 31, rtol 1e-6, PARDISO + refinement | 3.3e-13 | **4.1e-10 (gate 1e-10 not met)** |
+| same, without refinement | 5.9e-13 | 1.3e-9 |
+
+  - The α-law gate (≤ 1e-10) is met on both windows.
+  - The piecewise law on the full window misses it by 4×. [H] The cause is the conditioning of the
+    near-singular failure increments: refinement drives the backward error down, the forward error
+    stays at cond × eps. Not investigated further.
+- **Adjoint vs FD of J** (`s5b_adjoint_vs_fd.csv`): the S5a replay runs on b1's schedule (deterministic;
+  t10 is bit-identical to b1), with the same O. Best step per parameter; gate ≤ 1e-6:
+
+| | ln K0 | ln σ_c | ln G_c | α |
+|---|---|---|---|---|
+| J pre-peak | 6.3e-8 (h 1e-5) | 5.5e-7 (1e-5) | 3.8e-7 (1e-6) | 1.2e-7 (1e-4) |
+| J full, filtered | 3.1e-6 (1e-7) | 7.3e-6 (1e-6) | 2.2e-7 (1e-7) | 1.3e-6 (1e-5) |
+
+  - **Pre-peak: all four ≤ 1e-6.**
+  - **Full window: only ln G_c meets 1e-6.** The others stop at the same FD limit as S5a (failure-event
+    increments for h ≥ 1e-5, the 1/h noise below 1e-6).
+  - Invalid: h = 1e-3 on the full window for all parameters, and h = 1e-4 for ln G_c (the ± runs
+    leave b1's schedule).
+- **Scaling with p** (`s5b_scaling.csv`; piecewise law, one coarse forward run of 86 s):
+  - direct: 45 / 60 / 93 / 169 s for p = 4 / 8 / 16 / 31 (≈ 30 s + 4.5 s per parameter, i.e. linear);
+  - **adjoint: 25–27 s per objective for p = 31 (flat).**
+  - The two cost the same at p ≈ 0 here, because the direct method's per-increment Hessian and
+    factorization (~30 s) is about what the adjoint needs in total.
+- **Cost and memory** (`s5b_cost.csv`; one job, rtol 1e-6; measured *before* the refinement was added,
+  so the refinement solves are not included):
+
+| | forward | adjoint per J | of which solve (Hessian + factorization + solve) | storage | peak RSS |
+|---|---|---|---|---|---|
+| coarse `c_s40` | 86 s | 24–26 s (0.28–0.30×) | 20–22 s | 0.059 MB/incr., 100 MB | 0.62 GB |
+| production `sw_s40` | 462 s | 320–323 s (**0.69×**) | 297–300 s | **1.23 MB/incr., 1.03 GB** | 2.4 GB |
+
+  - Adjoint JIT: 10.5 s (coarse), 31 s (production).
+  - The storage estimate of the instructions (~1.3 MB / ~1.1 GB) is confirmed. In-memory storage fits
+    in 8 GB, so checkpointing was not implemented.
+
+**Gain.**
+- A gradient of any objective in the observed load, at 0.3–0.7× the forward cost, independent of the
+  number of law parameters. It is verified against the direct method (≤ 5e-11 for the α law) and
+  against FD of J (≤ 6e-7 pre-peak).
+- This is the tool for tabular and neural laws (Hao et al.).
+
+**Cost / limitations.**
+- Piecewise-law adjoint vs direct is 4.1e-10 on the full window.
+- Adjoint vs FD on the full window is FD-limited (≤ 7.3e-6).
+- Adjoint cost was measured without the refinement solves.
+
+## S5c — Fisher matrix of `sw_s40`, schedule stability, weak direction vs D18 — 2026-11-15 — (S5c commit)
+
+Runs: production `sw_s40` sensitivities.
+- A: S5a, rtol 1e-6.
+- B: `solver_S5c/sw_s40_t10`, rtol 1e-10 (job 45945542).
+- C: A's schedule shifted by half an increment.
+- D: 0.75 × the increment (C and D replayed with `--schedule`; jobs 45950706/7).
+
+Analysis: `scripts/fe/s5c_fisher.py`, `s5c_width_study.py`. Results in `results/solver/S5_sensitivity/s5c_*`
+and `s5c.png`.
+
+**Definitions.**
+- s is an **assumed** load-noise level per observation (independent, Gaussian), **not a measurement**.
+- θ3 = (ln σ_c, ln G_c, α); θ4 adds ln K0.
+- (i) pre-peak: F = (O S)ᵀ(O S)/s², 64 bins.
+- (ii) full window, filtered: the same with 424 bins.
+- (iii) full window, unfiltered: the 645 increments, with trapezoid weights normalised to the same
+  observation density.
+- Cramér–Rao σ_i = √(F⁻¹)_ii.
+
+**Results [D]** (schedule A; s = 1e-3 P_peak; at s = 1e-4 P_peak the eigenvalues are 100× larger and the
+CRB 10× smaller):
+
+| | eigenvalues θ3 | cond θ3 | CRB ln σ_c / ln G_c / α (θ3) | weak eigvec (ln σ_c, ln G_c, α) | cond θ4 | CRB ln K0 (θ4) |
+|---|---|---|---|---|---|---|
+| (i) pre-peak | 43.2, 7.55e4, 6.43e5 | 1.5e4 | 0.0066 / 0.0060 / 0.152 | (0.039, 0.035, 0.999) | 1.8e4 | 0.0055 |
+| (ii) full, filtered | 312, 4.30e5, 6.44e7 | 2.1e5 | 0.0042 / 1.25e-4 / 0.056 | (0.069, 0.0002, 0.998) | 2.4e5 | 0.0047 |
+| (iii) full, raw | 422, 4.72e5, 6.52e7 | 1.5e5 | 0.0037 / 1.24e-4 / 0.049 | (0.071, 0.0000, 0.998) | 1.7e5 | 0.0042 |
+
+[I] Reading the table:
+- α is by far the least determined parameter.
+- G_c is determined almost entirely by the propagation part of the curve (CRB 0.6 % → 0.0125 %).
+- The weak direction is mostly α with a small σ_c component; pre-peak it also involves G_c.
+
+**Schedule stability** (`s5c_stability.csv`, `s5c_width_study.csv`):
+- **B is not a different schedule inside the window.** The production run is at dtmax (Δδ = 0.002 mm)
+  throughout the window whatever rtol; A and B split only at δ = 1.395 mm (d_end 1.274). So A vs B is
+  identical to 1e-7, but that is no test. C and D are the test.
+- **C and D vs A, θ3:**
+  - λ_min changes by −9.8 % / −7.1 % in (i), +10.3 % / −4.1 % in (ii) and +6.5 % / +7.9 % in (iii);
+  - the other eigenvalues change by ≤ 2.5 %;
+  - the weak eigenvector rotates by ≤ 0.13° (i) and ≤ 0.04° (ii).
+  - With θ4, λ_min changes by up to 15 % and the weak direction by ≤ 0.2°.
+- **D29's ≤ ~1 % target: met for the weak direction, not for the eigenvalues.**
+- **(iii) is not less stable than (ii) at production resolution.** The motivation for the filter
+  (iii unstable) is therefore not shown here. It was shown on the coarse mesh for S itself: 32–43 %
+  with its own schedule in S5a.
+- **Cause [D].**
+  - Between schedules, the bin-averaged S differs by 5–6 % pre-peak and 10–14 % over the full window,
+    while P differs by ≤ 3.7e-4 P_peak.
+  - Pre-peak, the difference sits at δ = 0.17–0.19 mm, where the first tip elements fail before the
+    peak.
+  - The element passage (0.0017–0.0038 mm) is resolved by only 1–2 increments of 0.002 mm, so a
+    one-passage box does not average the sawtooth out.
+  - The small singular value of O S (σ_min/σ_max = 8e-3 pre-peak, 2.2e-3 full window) amplifies this
+    in λ_min. Measured: ‖ΔS v_min‖/σ_min = 0.13–0.15 pre-peak and 0.6–0.9 full window.
+- **Width study** (same runs, analysis only; θ3; changes of C/D vs A):
+
+| bin width (passages) | 1 | 2 | 4 | 8 | 16 |
+|---|---|---|---|---|---|
+| pre-peak: max \|Δλ\| (bins) | 9.8 % / 7.1 % (64) | 9.9 / 5.4 % (32) | **2.5 / 2.1 %** (16) | **1.5 / 2.5 %** (8) | 23 / 41 % (4: ill-conditioned) |
+| full: max \|Δλ\| | 10.3 / 4.1 % | 12.8 / 3.9 % | 12.3 / 3.2 % | 9.8 / 1.9 % | 3.0 / 5.5 % |
+
+  [I] No bin width gives ≤ 1 % at this increment size. [H] Resolving the passage with several increments
+  (dtmax ≤ ~0.0005 mm in δ, about 4× the production cost) would. Not run.
+
+**Weak direction vs D18** (`s5c_directions.csv`, `s5c_rayleigh.csv`). Slope d ln σ_c / dα at
+(σ_c 40, α 0); angles are taken in the (ln σ_c, α) plane, so they depend on that scaling.
+- **Peak-preserving direction:**
+  - sweeps (σ_c 35/45, α ±1.5): **0.110** in ABAQUS and in tslid.fe (∂P_peak/∂ln σ_c = 63.8 N,
+    ∂P_peak/∂α = −7.03 N);
+  - S5a ∂P_peak/∂θ: **0.103** (increment peak) and 0.102 (bin-average peak). That is 0.4° from the
+    sweeps, an independent check of S5a.
+- **D18 matched-peak pairs** (secant slopes, corrected for each pair's residual ΔP_peak of ≤ 0.7 %):
+  0.122, 0.091, **0.071** (σ_c 40 α 7 vs σ_c 25 α 0), 0.101, 0.116. Raw secants: 0.116, 0.094, 0.067,
+  0.119, 0.096.
+- **Fisher weak direction**, (ln σ_c, α) block: 0.066 (i), 0.069 (ii), 0.071 (iii). Projection of the θ3
+  weak eigenvector: 0.040 (i, it includes ln G_c), 0.069 (ii). The angles to the sweep direction are
+  2.1–4.0°.
+- **How weak is the peak-preserving direction?** vᵀFv / λ_min of the (ln σ_c, α) block: 4.7 (i),
+  3.3 (ii), 2.7 (iii); the S5a peak direction gives 3.4 / 2.5 / 2.1; the pair σ_c 40 α 7 gives ≈ 1.0 in
+  every variant.
+- [I] **The Fisher weak direction is not the peak-preserving one: slope 0.066–0.071 against 0.10–0.11.**
+  - The peak-preserving direction is weak, within 2–5× of the weakest, but the least-misfit direction
+    trades a small peak change against less change in the pre-peak shape.
+  - This is consistent with D18 [D]: the matched-peak pairs still differ by 1.7–5 % before the peak,
+    so holding the peak fixed is not the cheapest way to hide a change of (σ_c, α).
+- **Cross-check, S5c item 4** (`s5c_fdcheck.csv`): central FD of the sweep curves (σ_c 35/45, α ±1.5)
+  against S5a, bin-averaged.
+  - Pre-peak: 4.8 % (ln σ_c) and 7.0 % (α); correlation 0.998 / 0.999.
+  - Full window: 26 % / 36 %; correlation 0.96 / 0.93.
+  - The values are the same for the ABAQUS and tslid.fe sweeps. The steps are large (Δ ln σ_c = 0.25,
+    Δα = 3), so this is first-order agreement only, as expected.
+
+**Gain.**
+- The first quantitative identifiability result:
+  - local Cramér–Rao bounds for (ln K0, ln σ_c, ln G_c, α) on `sw_s40`, for stated noise levels;
+  - the weak direction is mostly α, and it is stable to ≤ 0.2° across schedules;
+  - the peak-preserving trade-off of D18 is reproduced by S5a to 0.4°;
+  - the misfit-weak direction differs from it, which is consistent with D18's pre-peak differences.
+
+**Cost / limitations.**
+- **Eigenvalues are schedule-dependent by 4–15 % (target ≤ ~1 %).** The one-passage filter does not
+  remove this at the production increment.
+- The (iii)-instability motivation of D29 is not reproduced at production.
+- CRBs are local (linearised) and use an assumed noise model.
+
+**Open items (user).**
+1. **Fisher eigenvalue stability** (≤ ~1 % not met). Options:
+   - (a) refine the increment in the window (dtmax ~4× smaller) so that each passage is resolved;
+     about 4× forward cost, and the run would show whether ≤ 1 % is reached;
+   - (b) widen the bin to 4–8 passages (pre-peak ≈ 2 %, full window still 2–12 %);
+   - (c) accept ~10 % on λ_min (CRB ~5 %) with a stable weak direction, and report it as a
+     discretisation uncertainty.
+2. Revisit D29's observation operator in the light of the above (width, or an increment-resolution
+   requirement).
+3. Piecewise-law adjoint vs direct: 4.1e-10 on the full window (gate 1e-10).
+4. Adjoint cost with the refinement solves (a rerun of the cost job); adjoint vs FD on the full window
+   is FD-limited (≤ 7.3e-6).

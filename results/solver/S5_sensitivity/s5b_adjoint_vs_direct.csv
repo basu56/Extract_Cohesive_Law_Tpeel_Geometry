@@ -1,0 +1,9 @@
+job,tag,law,rtol,window,bins,J,rel_err_p4,rel_err_p8,rel_err_p16,rel_err_p31
+c_s40,t10,alpha,1e-10,full,425,0.00623351,4.91683e-11,,,
+c_s40,t10,alpha,1e-10,prepeak,64,0.000356615,4.15258e-13,,,
+c_s40,pw30,piecewise:30,1e-06,full,425,0.00622998,4.07479e-10,4.07479e-10,4.07479e-10,4.07479e-10
+c_s40,pw30,piecewise:30,1e-06,prepeak,64,0.000356696,2.27843e-13,2.27843e-13,3.2591e-13,3.2591e-13
+c_s40,cost,alpha,1e-06,full,425,0.00622998,,,,
+c_s40,cost,alpha,1e-06,prepeak,64,0.000356696,,,,
+sw_s40,cost,alpha,1e-06,full,424,2.65944e-05,,,,
+sw_s40,cost,alpha,1e-06,prepeak,64,5.62249e-06,,,,

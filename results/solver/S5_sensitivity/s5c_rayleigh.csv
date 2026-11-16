@@ -1,0 +1,52 @@
+variant,source,dlnsigc_dalpha,rayleigh_theta3_over_lmin,rayleigh_block_over_lmin
+i_prepeak,"sweeps iso-peak at (40, 0), abaqus",0.110205,21.7532,4.66736
+i_prepeak,D18 pair as_s21_am1p5 vs sw_s25 (secant),0.116236,26.6815,5.72477
+i_prepeak,D18 pair as_s21_am1p5 vs sw_s25 (corrected),0.122028,31.9926,6.86431
+i_prepeak,D18 pair as_s40_a5 vs sw_s25 (secant),0.0940007,11.577,2.48397
+i_prepeak,D18 pair as_s40_a5 vs sw_s25 (corrected),0.0904966,9.96838,2.13881
+i_prepeak,D18 pair as_s40_a7 vs sw_s25 (secant),0.0671434,4.67645,1.00338
+i_prepeak,D18 pair as_s40_a7 vs sw_s25 (corrected),0.0705487,4.85752,1.04223
+i_prepeak,D18 pair as_s21_am3 vs sw_s30 (secant),0.118892,29.0469,6.23229
+i_prepeak,D18 pair as_s21_am3 vs sw_s30 (corrected),0.100874,15.3449,3.2924
+i_prepeak,D18 pair as_s40_a3 vs sw_s30 (secant),0.095894,12.5341,2.68932
+i_prepeak,D18 pair as_s40_a3 vs sw_s30 (corrected),0.115696,26.2151,5.6247
+i_prepeak,"sweeps iso-peak at (40, 0), tslid.fe",0.110327,21.8467,4.68741
+i_prepeak,"S5a dP_peak/dtheta (increment peak), A_rtol1e-6",0.10322,16.8167,3.60818
+i_prepeak,"S5a dP_peak/dtheta (bin-average peak), A_rtol1e-6",0.101801,15.9155,3.41482
+i_prepeak,"F i_prepeak (lnsigc, alpha) block weak, A_rtol1e-6",0.0658008,4.66071,1
+i_prepeak,"F ii_full_filtered (lnsigc, alpha) block weak, A_rtol1e-6",0.0689981,4.74998,1.01915
+i_prepeak,"F iii_full_raw (lnsigc, alpha) block weak, A_rtol1e-6",0.0707842,4.87752,1.04652
+ii_full_filtered,"sweeps iso-peak at (40, 0), abaqus",0.110205,3.30206,3.28543
+ii_full_filtered,D18 pair as_s21_am1p5 vs sw_s25 (secant),0.116236,4.01952,3.99928
+ii_full_filtered,D18 pair as_s21_am1p5 vs sw_s25 (corrected),0.122028,4.79892,4.77475
+ii_full_filtered,D18 pair as_s40_a5 vs sw_s25 (secant),0.0940007,1.85349,1.84416
+ii_full_filtered,D18 pair as_s40_a5 vs sw_s25 (corrected),0.0904966,1.63274,1.62452
+ii_full_filtered,D18 pair as_s40_a7 vs sw_s25 (secant),0.0671434,1.00975,1.00467
+ii_full_filtered,D18 pair as_s40_a7 vs sw_s25 (corrected),0.0705487,1.00834,1.00326
+ii_full_filtered,D18 pair as_s21_am3 vs sw_s30 (secant),0.118892,4.36598,4.34399
+ii_full_filtered,D18 pair as_s21_am3 vs sw_s30 (corrected),0.100874,2.38221,2.37021
+ii_full_filtered,D18 pair as_s40_a3 vs sw_s30 (secant),0.095894,1.9865,1.97649
+ii_full_filtered,D18 pair as_s40_a3 vs sw_s30 (corrected),0.115696,3.95135,3.93145
+ii_full_filtered,"sweeps iso-peak at (40, 0), tslid.fe",0.110327,3.3156,3.2989
+ii_full_filtered,"S5a dP_peak/dtheta (increment peak), A_rtol1e-6",0.10322,2.59168,2.57863
+ii_full_filtered,"S5a dP_peak/dtheta (bin-average peak), A_rtol1e-6",0.101801,2.46326,2.45085
+ii_full_filtered,"F i_prepeak (lnsigc, alpha) block weak, A_rtol1e-6",0.0658008,1.019,1.01387
+ii_full_filtered,"F ii_full_filtered (lnsigc, alpha) block weak, A_rtol1e-6",0.0689981,1.00506,1
+ii_full_filtered,"F iii_full_raw (lnsigc, alpha) block weak, A_rtol1e-6",0.0707842,1.00941,1.00432
+iii_full_raw,"sweeps iso-peak at (40, 0), abaqus",0.110205,2.71202,2.71194
+iii_full_raw,D18 pair as_s21_am1p5 vs sw_s25 (secant),0.116236,3.27282,3.27273
+iii_full_raw,D18 pair as_s21_am1p5 vs sw_s25 (corrected),0.122028,3.88507,3.88495
+iii_full_raw,D18 pair as_s40_a5 vs sw_s25 (secant),0.0940007,1.59578,1.59574
+iii_full_raw,D18 pair as_s40_a5 vs sw_s25 (corrected),0.0904966,1.42979,1.42975
+iii_full_raw,D18 pair as_s40_a7 vs sw_s25 (secant),0.0671434,1.01474,1.01471
+iii_full_raw,D18 pair as_s40_a7 vs sw_s25 (corrected),0.0705487,1.00009,1.00006
+iii_full_raw,D18 pair as_s21_am3 vs sw_s30 (secant),0.118892,3.54465,3.54454
+iii_full_raw,D18 pair as_s21_am3 vs sw_s30 (corrected),0.100874,1.99939,1.99933
+iii_full_raw,D18 pair as_s40_a3 vs sw_s30 (secant),0.095894,1.69666,1.69662
+iii_full_raw,D18 pair as_s40_a3 vs sw_s30 (corrected),0.115696,3.2194,3.21931
+iii_full_raw,"sweeps iso-peak at (40, 0), tslid.fe",0.110327,2.72257,2.72249
+iii_full_raw,"S5a dP_peak/dtheta (increment peak), A_rtol1e-6",0.10322,2.16079,2.16073
+iii_full_raw,"S5a dP_peak/dtheta (bin-average peak), A_rtol1e-6",0.101801,2.06176,2.0617
+iii_full_raw,"F i_prepeak (lnsigc, alpha) block weak, A_rtol1e-6",0.0658008,1.0276,1.02757
+iii_full_raw,"F ii_full_filtered (lnsigc, alpha) block weak, A_rtol1e-6",0.0689981,1.00357,1.00354
+iii_full_raw,"F iii_full_raw (lnsigc, alpha) block weak, A_rtol1e-6",0.0707842,1.00003,1

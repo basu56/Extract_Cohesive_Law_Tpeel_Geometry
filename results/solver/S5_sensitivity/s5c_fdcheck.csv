@@ -1,0 +1,9 @@
+solver,param,window,fd_step,rel_l2,corr
+abaqus,ln_sigc,prepeak,0.251314,0.0479713,0.998138
+abaqus,ln_sigc,full,0.251314,0.258746,0.964229
+abaqus,alpha,prepeak,3,0.0695076,0.99917
+abaqus,alpha,full,3,0.358041,0.933262
+tslid.fe,ln_sigc,prepeak,0.251314,0.0480634,0.99813
+tslid.fe,ln_sigc,full,0.251314,0.258535,0.96429
+tslid.fe,alpha,prepeak,3,0.0697201,0.999152
+tslid.fe,alpha,full,3,0.357443,0.933542

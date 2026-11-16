@@ -1,0 +1,8 @@
+method,p,wall,over_forward
+direct,4,44.9476,0.521184
+direct,8,60.3585,0.699878
+direct,16,92.9884,1.07823
+direct,31,169.412,1.96439
+adjoint (full),31,26.7335,0.309984
+adjoint (prepeak),31,24.5847,0.285069
+"forward (net of direct, record)",0,86.2414,1
