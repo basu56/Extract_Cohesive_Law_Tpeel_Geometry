@@ -219,6 +219,15 @@ class DirectSensitivity:
         self._total = jax.jit(total)
         self._kinks = jax.jit(kinks)
 
+    def reset(self, law=None, basis=None):
+        """Start a new run (I1: one compiled instance serves every inversion iterate).  law / basis
+        replace the current ones (same pytree structure, so the jitted kernels are reused)."""
+        if law is not None:
+            self.law = law
+        if basis is not None:
+            self.basis = basis
+        self.Sh, self.rows, self.wall = None, [], 0.0
+
     def step(self, q, hist_old, h, hist_new, dt):
         t0 = time.perf_counter()
         q = jnp.asarray(q)
