@@ -285,7 +285,7 @@ for (run, z), mk in zip(Z.items(), ("o", "s", "^", "v")):
         ax[1].semilogy(np.arange(len(lam)) + 0.08 * "os^v".index(mk) - 0.12, lam, mk, color=c, mfc="w" if mk != "o" else c,
                        label=f"{kn}, {run}")
 ax[1].set(xlabel="eigenvalue index (theta4)", ylabel=r"eigenvalue of F, s = 1e-3 $P_{peak}$",
-          title="(b) Fisher spectra, two schedules")
+          title="(b) Fisher spectra, four schedules (A, B = A in window, C shift, D 0.75 dt)")
 ax[1].legend(frameon=False, fontsize=6)
 for r, c in zip([r for r in drows if ("pair" not in r["source"] or "corrected" in r["source"])
                  and "projected" not in r["source"] and r["source"].endswith(("A_rtol1e-6", "abaqus", "tslid.fe", "(corrected)"))], C * 4):
